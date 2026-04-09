@@ -1,0 +1,272 @@
+{% extends "base/base.html" %}
+{% block title %}{{ setor.codigo }} — {{ setor.nome }}{% endblock %}
+{% block page_title %}{{ setor.nome }}{% endblock %}
+
+{% block content %}
+<div class="mb-4 flex items-center gap-2 text-xs text-gray-400">
+  <a href="/dashboard/" class="hover:text-brand-600">Dashboard</a>
+  <span>›</span>
+  <span class="text-gray-600">{{ setor.codigo }}</span>
+</div>
+
+<!-- Header do setor -->
+<div class="card p-5 mb-5 flex items-center justify-between">
+  <div class="flex items-center gap-4">
+    <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white font-semibold text-lg flex-shrink-0"
+         style="background:{{ setor.cor }}">
+      {{ setor.codigo|slice:":2" }}
+    </div>
+    <div>
+      <h1 class="text-base font-semibold text-gray-900">{{ setor.nome }}</h1>
+      <div class="flex items-center gap-3 mt-1 text-xs text-gray-400">
+        <span>{{ setor.get_tipo_display }}</span>
+        <span>·</span>
+        <span>Nível {{ setor.nivel }}</span>
+        {% if setor.parent %}<span>·</span><span>↑ {{ setor.parent.codigo }}</span>{% endif %}
+        {% if setor.responsavel %}<span>·</span><span>{{ setor.responsavel }}</span>{% endif %}
+      </div>
+    </div>
+  </div>
+  <a href="/dashboard/registro/?setor={{ setor.codigo }}" class="btn-primary text-sm">
+    + Lançar Registro
+  </a>
+</div>
+
+<!-- Tabs -->
+<div class="border-b border-gray-100 mb-5 flex gap-0">
+  <button onclick="showTab('indicadores')" id="tab-indicadores"
+    class="tab-btn active-tab px-4 py-2.5 text-sm font-medium border-b-2 border-transparent -mb-px transition-colors">
+    Indicadores
+  </button>
+  <button onclick="showTab('historico')" id="tab-historico"
+    class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-transparent -mb-px transition-colors text-gray-500 hover:text-gray-700">
+    Histórico
+  </button>
+  <button onclick="showTab('grafico')" id="tab-grafico"
+    class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-transparent -mb-px transition-colors text-gray-500 hover:text-gray-700">
+    Gráficos
+  </button>
+  {% if setor.subordinados.exists %}
+  <button onclick="showTab('subordinados')" id="tab-subordinados"
+    class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-transparent -mb-px transition-colors text-gray-500 hover:text-gray-700">
+    Subordinados
+  </button>
+  {% endif %}
+</div>
+
+<!-- TAB: Indicadores -->
+<div id="pane-indicadores">
+  <div id="indicadores-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-5"></div>
+  <div class="card p-5">
+    <h3 class="text-sm font-semibold text-gray-800 mb-3">Registros recentes</h3>
+    <div id="registros-recentes"></div>
+  </div>
+</div>
+
+<!-- TAB: Histórico -->
+<div id="pane-historico" class="hidden">
+  <div class="card p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-sm font-semibold text-gray-800">Histórico completo</h3>
+      <div class="flex gap-2">
+        <select id="filtro-status" class="text-xs rounded-lg px-2 py-1.5" style="width:auto">
+          <option value="">Todos os status</option>
+          <option value="normal">Normal</option>
+          <option value="atencao">Atenção</option>
+          <option value="critico">Crítico</option>
+        </select>
+      </div>
+    </div>
+    <div id="tabela-historico"></div>
+  </div>
+</div>
+
+<!-- TAB: Gráficos -->
+<div id="pane-grafico" class="hidden">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+    <div class="card p-5">
+      <h3 class="text-sm font-semibold text-gray-800 mb-4">Evolução mensal</h3>
+      <canvas id="chart-linha" height="200"></canvas>
+    </div>
+    <div class="card p-5">
+      <h3 class="text-sm font-semibold text-gray-800 mb-4">Distribuição por status</h3>
+      <canvas id="chart-pizza" height="200"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: Subordinados -->
+<div id="pane-subordinados" class="hidden">
+  <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+    {% for sub in setor.subordinados.all %}
+    <a href="/dashboard/setor/{{ sub.codigo }}/" class="card p-4 hover:shadow-sm transition-shadow block">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="w-2 h-2 rounded-full" style="background:{{ sub.cor }}"></span>
+        <span class="text-xs font-semibold text-gray-700">{{ sub.codigo }}</span>
+      </div>
+      <div class="text-xs text-gray-500">{{ sub.nome }}</div>
+      <div class="text-xs text-gray-400 mt-1">{{ sub.get_tipo_display }}</div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+<style>
+.tab-btn.active-tab { color:#185FA5; border-bottom-color:#185FA5; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const SETOR_CODIGO = '{{ setor.codigo }}';
+let chartLinha = null, chartPizza = null;
+
+function showTab(tab) {
+  ['indicadores','historico','grafico','subordinados'].forEach(t => {
+    document.getElementById('pane-'+t)?.classList.add('hidden');
+    document.getElementById('tab-'+t)?.classList.remove('active-tab');
+  });
+  document.getElementById('pane-'+tab)?.classList.remove('hidden');
+  document.getElementById('tab-'+tab)?.classList.add('active-tab');
+  if (tab === 'grafico') renderGraficos();
+  if (tab === 'historico') carregarHistorico();
+}
+
+async function carregarIndicadores() {
+  try {
+    const [inds, regs] = await Promise.all([
+      api('/api/indicadores/?setor='+SETOR_CODIGO),
+      api('/api/indicadores/registros/?setor='+SETOR_CODIGO)
+    ]);
+    const indicadores = inds.results || inds;
+    const registros = regs.results || regs;
+
+    // Métricas
+    const grid = document.getElementById('indicadores-grid');
+    if (!indicadores.length) {
+      grid.innerHTML = '<p class="text-xs text-gray-400 col-span-full">Nenhum indicador cadastrado para este setor.</p>';
+    } else {
+      grid.innerHTML = indicadores.map(ind => {
+        const ultReg = registros.find(r=>r.indicador===ind.id);
+        const statusCls = ultReg ? {normal:'text-teal-600',atencao:'text-amber-600',critico:'text-danger-600'}[ultReg.status]||'' : '';
+        return `<div class="metric-card">
+          <div class="text-xs text-gray-500 mb-1 truncate">${ind.nome_display}</div>
+          <div class="text-2xl font-semibold ${statusCls}">${ultReg ? ultReg.valor : '—'}</div>
+          ${ultReg ? `<div class="text-xs text-gray-400 mt-1">${new Date(ultReg.data_referencia+'T00:00:00').toLocaleDateString('pt-BR')}</div>` : ''}
+          ${ultReg ? `<span class="pill pill-${ultReg.status==='normal'?'ok':ultReg.status==='atencao'?'warn':'crit'} mt-2 text-xs">${{normal:'Normal',atencao:'Atenção',critico:'Crítico'}[ultReg.status]}</span>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    // Tabela recente
+    const tabRec = document.getElementById('registros-recentes');
+    if (!registros.length) {
+      tabRec.innerHTML = '<p class="text-xs text-gray-400">Nenhum registro ainda. <a href="/dashboard/registro/" class="text-brand-600 hover:underline">Lançar primeiro registro</a>.</p>';
+    } else {
+      tabRec.innerHTML = `<table class="w-full text-xs">
+        <thead><tr class="border-b border-gray-100">
+          <th class="text-left py-2 text-gray-400 font-medium">Data</th>
+          <th class="text-left py-2 text-gray-400 font-medium">Indicador</th>
+          <th class="text-left py-2 text-gray-400 font-medium">Valor</th>
+          <th class="text-left py-2 text-gray-400 font-medium">Status</th>
+          <th class="text-left py-2 text-gray-400 font-medium">Usuário</th>
+        </tr></thead>
+        <tbody>${registros.slice(0,8).map(r=>`
+          <tr class="border-b border-gray-50 hover:bg-gray-50">
+            <td class="py-2 text-gray-600">${new Date(r.data_referencia+'T00:00:00').toLocaleDateString('pt-BR')}</td>
+            <td class="py-2 text-gray-700 font-medium">${r.indicador_nome}</td>
+            <td class="py-2 font-mono text-gray-800">${r.valor}</td>
+            <td class="py-2"><span class="pill pill-${r.status==='normal'?'ok':r.status==='atencao'?'warn':'crit'}">${{normal:'Normal',atencao:'Atenção',critico:'Crítico'}[r.status]}</span></td>
+            <td class="py-2 text-gray-500">${r.usuario_nome}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    }
+  } catch(e) { console.error(e); }
+}
+
+async function carregarHistorico() {
+  const status = document.getElementById('filtro-status')?.value||'';
+  try {
+    const d = await api(`/api/indicadores/registros/?setor=${SETOR_CODIGO}&status=${status}`);
+    const registros = d.results||d;
+    const el = document.getElementById('tabela-historico');
+    if (!registros.length) { el.innerHTML='<p class="text-xs text-gray-400">Nenhum registro encontrado.</p>'; return; }
+    el.innerHTML = `<table class="w-full text-xs">
+      <thead><tr class="border-b border-gray-100">
+        <th class="text-left py-2 text-gray-400 font-medium">Data</th>
+        <th class="text-left py-2 text-gray-400 font-medium">Indicador</th>
+        <th class="text-left py-2 text-gray-400 font-medium">Valor</th>
+        <th class="text-left py-2 text-gray-400 font-medium">Status</th>
+        <th class="text-left py-2 text-gray-400 font-medium">Observação</th>
+        <th class="text-left py-2 text-gray-400 font-medium">Lançado por</th>
+      </tr></thead>
+      <tbody>${registros.map(r=>`
+        <tr class="border-b border-gray-50 hover:bg-gray-50">
+          <td class="py-2 text-gray-600">${new Date(r.data_referencia+'T00:00:00').toLocaleDateString('pt-BR')}</td>
+          <td class="py-2 text-gray-700">${r.indicador_nome}</td>
+          <td class="py-2 font-mono font-medium">${r.valor}</td>
+          <td class="py-2"><span class="pill pill-${r.status==='normal'?'ok':r.status==='atencao'?'warn':'crit'}">${{normal:'Normal',atencao:'Atenção',critico:'Crítico'}[r.status]}</span></td>
+          <td class="py-2 text-gray-400 max-w-xs truncate">${r.observacao||'—'}</td>
+          <td class="py-2 text-gray-500">${r.usuario_nome}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+    document.getElementById('filtro-status')?.addEventListener('change', carregarHistorico);
+  } catch(e) {}
+}
+
+async function renderGraficos() {
+  try {
+    const d = await api('/api/indicadores/grafico/'+SETOR_CODIGO+'/');
+    const meses = [...new Set(d.map(x=>x.mes))].sort();
+    const tipos = [...new Set(d.map(x=>x.tipo))];
+
+    // Gráfico de linha
+    const ctxL = document.getElementById('chart-linha');
+    if (chartLinha) chartLinha.destroy();
+    const cores = ['#185FA5','#0F6E56','#993C1D','#534AB7','#854F0B','#A32D2D'];
+    chartLinha = new Chart(ctxL, {
+      type: 'line',
+      data: {
+        labels: meses.length ? meses : ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'],
+        datasets: tipos.length ? tipos.map((tipo, i) => ({
+          label: tipo,
+          data: meses.map(m => { const item = d.find(x=>x.mes===m&&x.tipo===tipo); return item?item.total:0; }),
+          borderColor: cores[i%cores.length],
+          backgroundColor: cores[i%cores.length]+'22',
+          tension: 0.4, fill: true, pointRadius: 3,
+        })) : [{label:'Sem dados',data:[0],borderColor:'#185FA5',backgroundColor:'#185FA522',tension:0.4}]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{position:'bottom',labels:{font:{size:11},boxWidth:10}} },
+        scales:{ y:{grid:{color:'#f0efea'},ticks:{font:{size:11}}}, x:{grid:{display:false},ticks:{font:{size:10}}} }
+      }
+    });
+
+    // Pizza de status
+    const ctxP = document.getElementById('chart-pizza');
+    const regs = await api('/api/indicadores/registros/?setor='+SETOR_CODIGO);
+    const registros = regs.results||regs;
+    const normal = registros.filter(r=>r.status==='normal').length;
+    const atencao = registros.filter(r=>r.status==='atencao').length;
+    const critico = registros.filter(r=>r.status==='critico').length;
+    if (chartPizza) chartPizza.destroy();
+    chartPizza = new Chart(ctxP, {
+      type: 'doughnut',
+      data: {
+        labels: ['Normal','Atenção','Crítico'],
+        datasets: [{ data:[normal,atencao,critico], backgroundColor:['#1D9E75','#BA7517','#E24B4A'], borderWidth:0 }]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{position:'bottom',labels:{font:{size:11},boxWidth:10}} }
+      }
+    });
+  } catch(e) { console.error(e); }
+}
+
+carregarIndicadores();
+</script>
+{% endblock %}

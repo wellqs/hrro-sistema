@@ -1,0 +1,206 @@
+{% extends "base/base.html" %}
+{% block title %}Lançar Registro — SaúdeGestão RO{% endblock %}
+{% block nav_registro %}active{% endblock %}
+{% block page_title %}Lançar Registro{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+
+  <div class="card p-6 mb-5">
+    <h2 class="text-sm font-semibold text-gray-800 mb-5">Novo Registro de Indicador</h2>
+
+    <div id="msg-sucesso" class="hidden mb-4 p-3 bg-teal-50 text-teal-600 rounded-lg text-sm border border-teal-100 flex items-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+      Registro salvo com sucesso!
+    </div>
+    <div id="msg-erro" class="hidden mb-4 p-3 bg-danger-50 text-danger-600 rounded-lg text-sm border border-danger-100"></div>
+
+    <form id="form-registro" class="space-y-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Setor *</label>
+          <select id="sel-setor" required class="w-full">
+            <option value="">Selecione o setor...</option>
+            {% for s in setores %}
+            <option value="{{ s.codigo }}" {% if user.setor and user.setor.codigo == s.codigo %}selected{% endif %}>
+              {{ s.codigo }} — {{ s.nome }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Indicador *</label>
+          <select id="sel-indicador" required class="w-full" disabled>
+            <option value="">Selecione o setor primeiro...</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Valor *</label>
+          <input type="number" id="inp-valor" step="0.01" placeholder="Ex: 142" required class="w-full" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Data de Referência *</label>
+          <input type="date" id="inp-data" required class="w-full" />
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Observação</label>
+        <textarea id="inp-obs" rows="3" placeholder="Detalhes, contexto, justificativas..." class="w-full resize-none"></textarea>
+      </div>
+
+      <!-- Preview de limite -->
+      <div id="preview-limite" class="hidden p-3 rounded-lg bg-gray-50 text-xs text-gray-600">
+        <span class="font-medium">Limites configurados:</span>
+        <span id="txt-limite"></span>
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button type="submit" class="btn-primary">Salvar Registro</button>
+        <button type="button" onclick="limparForm()" class="btn-secondary">Limpar</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Últimos registros -->
+  <div class="card p-5">
+    <h3 class="text-sm font-semibold text-gray-800 mb-3">Últimos registros lançados</h3>
+    <div id="ultimos-registros">
+      <p class="text-xs text-gray-400">Carregando...</p>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Preenche data de hoje
+document.getElementById('inp-data').value = new Date().toISOString().split('T')[0];
+
+// Ao trocar setor, carrega indicadores
+document.getElementById('sel-setor').addEventListener('change', async function() {
+  const codigo = this.value;
+  const sel = document.getElementById('sel-indicador');
+  sel.innerHTML = '<option value="">Carregando...</option>';
+  sel.disabled = true;
+  document.getElementById('preview-limite').classList.add('hidden');
+  if (!codigo) { sel.innerHTML='<option value="">Selecione o setor primeiro...</option>'; return; }
+  try {
+    const d = await api('/api/indicadores/?setor='+codigo);
+    const inds = d.results||d;
+    if (!inds.length) {
+      sel.innerHTML='<option value="">Nenhum indicador cadastrado</option>';
+    } else {
+      sel.innerHTML = '<option value="">Selecione o indicador...</option>' +
+        inds.map(i=>`<option value="${i.id}" data-atencao="${i.limite_atencao||''}" data-critico="${i.limite_critico||''}">${i.nome_display}</option>`).join('');
+      sel.disabled = false;
+    }
+  } catch(e) { sel.innerHTML='<option value="">Erro ao carregar</option>'; }
+});
+
+// Ao trocar indicador, mostra limites
+document.getElementById('sel-indicador').addEventListener('change', function() {
+  const opt = this.options[this.selectedIndex];
+  const atencao = opt.dataset.atencao;
+  const critico = opt.dataset.critico;
+  const prev = document.getElementById('preview-limite');
+  const txt = document.getElementById('txt-limite');
+  if (atencao || critico) {
+    txt.textContent = ` Atenção: ${atencao||'—'}  |  Crítico: ${critico||'—'}`;
+    prev.classList.remove('hidden');
+  } else {
+    prev.classList.add('hidden');
+  }
+});
+
+// Submit
+document.getElementById('form-registro').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = this.querySelector('[type=submit]');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+
+  const payload = {
+    indicador: document.getElementById('sel-indicador').value,
+    valor: parseFloat(document.getElementById('inp-valor').value),
+    data_referencia: document.getElementById('inp-data').value,
+    observacao: document.getElementById('inp-obs').value,
+  };
+
+  try {
+    const r = await fetch('/api/indicadores/registros/', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': window.csrfToken},
+      body: JSON.stringify(payload),
+      credentials: 'include',
+    });
+    const d = await r.json();
+    if (r.ok) {
+      document.getElementById('msg-sucesso').classList.remove('hidden');
+      document.getElementById('msg-erro').classList.add('hidden');
+      limparForm();
+      carregarUltimos();
+      setTimeout(()=>document.getElementById('msg-sucesso').classList.add('hidden'), 4000);
+    } else {
+      const erros = Object.entries(d).map(([k,v])=>`${k}: ${v}`).join('; ');
+      document.getElementById('msg-erro').textContent = 'Erro: ' + erros;
+      document.getElementById('msg-erro').classList.remove('hidden');
+    }
+  } catch(err) {
+    document.getElementById('msg-erro').textContent = 'Erro de conexão. Tente novamente.';
+    document.getElementById('msg-erro').classList.remove('hidden');
+  }
+  btn.disabled = false; btn.textContent = 'Salvar Registro';
+});
+
+function limparForm() {
+  document.getElementById('inp-valor').value = '';
+  document.getElementById('inp-obs').value = '';
+  document.getElementById('inp-data').value = new Date().toISOString().split('T')[0];
+  document.getElementById('preview-limite').classList.add('hidden');
+}
+
+async function carregarUltimos() {
+  try {
+    const setor = document.getElementById('sel-setor').value;
+    const url = '/api/indicadores/registros/' + (setor?'?setor='+setor:'');
+    const d = await api(url);
+    const regs = (d.results||d).slice(0,6);
+    const el = document.getElementById('ultimos-registros');
+    if (!regs.length) { el.innerHTML='<p class="text-xs text-gray-400">Nenhum registro ainda.</p>'; return; }
+    el.innerHTML = `<table class="w-full text-xs">
+      <thead><tr class="border-b border-gray-100">
+        <th class="text-left py-2 text-gray-400 font-medium">Data</th>
+        <th class="text-left py-2 text-gray-400 font-medium">Setor</th>
+        <th class="text-left py-2 text-gray-400 font-medium">Indicador</th>
+        <th class="text-left py-2 text-gray-400 font-medium">Valor</th>
+        <th class="text-left py-2 text-gray-400 font-medium">Status</th>
+      </tr></thead>
+      <tbody>
+        ${regs.map(r=>`<tr class="border-b border-gray-50 hover:bg-gray-50">
+          <td class="py-2 text-gray-500">${new Date(r.data_referencia+'T00:00:00').toLocaleDateString('pt-BR')}</td>
+          <td class="py-2 font-medium text-gray-700">${r.setor_codigo}</td>
+          <td class="py-2 text-gray-600">${r.indicador_nome}</td>
+          <td class="py-2 font-mono font-medium text-gray-800">${r.valor}</td>
+          <td class="py-2"><span class="pill pill-${r.status==='normal'?'ok':r.status==='atencao'?'warn':'crit'}">${{normal:'Normal',atencao:'Atenção',critico:'Crítico'}[r.status]}</span></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  } catch(e) {}
+}
+
+carregarUltimos();
+
+// Pre-selecionar setor se vier da URL
+const params = new URLSearchParams(window.location.search);
+const setorParam = params.get('setor');
+if (setorParam) {
+  const sel = document.getElementById('sel-setor');
+  sel.value = setorParam;
+  sel.dispatchEvent(new Event('change'));
+}
+</script>
+{% endblock %}

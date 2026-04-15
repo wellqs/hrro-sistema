@@ -1,0 +1,122 @@
+{% extends "base/base.html" %}
+{% block title %}Alertas — SaúdeGestão RO{% endblock %}
+{% block nav_alertas %}active{% endblock %}
+{% block page_title %}Alertas do Sistema{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+  <div id="contadores" class="flex gap-3"></div>
+  <button onclick="marcarTodosLidos()" class="btn-secondary text-sm">Marcar todos como lidos</button>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-5">
+  <div class="lg:col-span-3">
+    <div class="card">
+      <div class="p-4 border-b border-gray-100 flex gap-2 flex-wrap">
+        <select id="filtro-nivel" class="text-xs rounded-lg px-2 py-1.5" style="width:auto">
+          <option value="">Todos os níveis</option>
+          <option value="critico">Crítico</option>
+          <option value="atencao">Atenção</option>
+          <option value="info">Informação</option>
+        </select>
+        <select id="filtro-lido" class="text-xs rounded-lg px-2 py-1.5" style="width:auto">
+          <option value="false">Não lidos</option>
+          <option value="true">Lidos</option>
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div id="lista-alertas" class="divide-y divide-gray-50 min-h-24"></div>
+    </div>
+  </div>
+
+  <!-- Config de limites -->
+  <div class="space-y-4">
+    <div class="card p-5">
+      <h3 class="text-sm font-semibold text-gray-800 mb-4">Limites de Alerta</h3>
+      <p class="text-xs text-gray-400 mb-4">Configure os limites nos indicadores de cada setor via admin ou API.</p>
+      <a href="/admin/indicadores/indicador/" target="_blank" class="btn-secondary text-xs w-full block text-center">
+        Gerenciar no Admin
+      </a>
+    </div>
+    <div class="card p-5">
+      <h3 class="text-sm font-semibold text-gray-800 mb-3">Legenda</h3>
+      <div class="space-y-2 text-xs">
+        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-danger-400"></span><span class="text-gray-600">Crítico — requer ação imediata</span></div>
+        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-amber-400"></span><span class="text-gray-600">Atenção — monitorar de perto</span></div>
+        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-brand-400"></span><span class="text-gray-600">Informação — registro relevante</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function carregarAlertas() {
+  const nivel = document.getElementById('filtro-nivel').value;
+  const lido = document.getElementById('filtro-lido').value;
+  let url = '/api/alertas/?';
+  if (nivel) url += 'nivel='+nivel+'&';
+  if (lido !== '') url += 'lido='+lido;
+
+  try {
+    const [d, cont] = await Promise.all([api(url), api('/api/alertas/contagem/')]);
+    const alertas = d.results||d;
+
+    // Contadores
+    document.getElementById('contadores').innerHTML = `
+      <div class="metric-card flex gap-4 px-4">
+        <div class="text-center"><div class="text-lg font-semibold text-danger-600">${cont.criticos||0}</div><div class="text-xs text-gray-400">Críticos</div></div>
+        <div class="text-center"><div class="text-lg font-semibold text-amber-600">${cont.atencao||0}</div><div class="text-xs text-gray-400">Atenção</div></div>
+        <div class="text-center"><div class="text-lg font-semibold text-brand-600">${cont.info||0}</div><div class="text-xs text-gray-400">Info</div></div>
+        <div class="text-center"><div class="text-lg font-semibold text-gray-700">${cont.total||0}</div><div class="text-xs text-gray-400">Total</div></div>
+      </div>`;
+
+    const lista = document.getElementById('lista-alertas');
+    if (!alertas.length) {
+      lista.innerHTML='<div class="p-8 text-center"><p class="text-sm text-gray-400">Nenhum alerta encontrado.</p></div>';
+      return;
+    }
+    const cfg = {
+      critico:{bg:'bg-danger-50',text:'text-danger-700',badge:'pill-crit',label:'Crítico'},
+      atencao:{bg:'bg-amber-50',text:'text-amber-700',badge:'pill-warn',label:'Atenção'},
+      info:{bg:'bg-brand-50',text:'text-brand-700',badge:'pill-info',label:'Info'}
+    };
+    lista.innerHTML = alertas.map(a => {
+      const c = cfg[a.nivel]||cfg.info;
+      return `<div class="flex items-start gap-4 p-4 ${a.lido?'opacity-50':''}">
+        <div class="w-8 h-8 rounded-lg ${c.bg} flex items-center justify-center flex-shrink-0">
+          <span class="w-2 h-2 rounded-full ${a.nivel==='critico'?'bg-danger-400':a.nivel==='atencao'?'bg-amber-400':'bg-brand-400'}"></span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-xs font-semibold text-gray-500">${a.setor_codigo}</span>
+            <span class="pill ${c.badge}">${c.label}</span>
+            ${a.lido?'<span class="text-xs text-gray-300">Lido</span>':''}
+          </div>
+          <div class="text-sm font-medium text-gray-800">${a.titulo}</div>
+          <div class="text-xs text-gray-500 mt-1">${a.descricao}</div>
+          <div class="text-xs text-gray-400 mt-1">${new Date(a.criado_em).toLocaleString('pt-BR')}</div>
+        </div>
+        ${!a.lido?`<button onclick="marcarLido(${a.id},this)" class="btn-secondary text-xs flex-shrink-0">Marcar lido</button>`:''}
+      </div>`;
+    }).join('');
+  } catch(e) { console.error(e); }
+}
+
+async function marcarLido(id, btn) {
+  await api('/api/alertas/'+id+'/lido/', {method:'POST'});
+  carregarAlertas();
+}
+
+async function marcarTodosLidos() {
+  if (!confirm('Marcar todos os alertas como lidos?')) return;
+  await api('/api/alertas/marcar-todos-lidos/', {method:'POST'});
+  carregarAlertas();
+}
+
+document.getElementById('filtro-nivel').addEventListener('change', carregarAlertas);
+document.getElementById('filtro-lido').addEventListener('change', carregarAlertas);
+carregarAlertas();
+</script>
+{% endblock %}

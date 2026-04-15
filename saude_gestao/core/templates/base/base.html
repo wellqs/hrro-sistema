@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}SaúdeGestão RO{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['DM Sans', 'sans-serif'], mono: ['DM Mono', 'monospace'] },
+          colors: {
+            brand: { 50:'#E6F1FB', 100:'#B5D4F4', 400:'#378ADD', 600:'#185FA5', 800:'#0C447C' },
+            teal:  { 50:'#E1F5EE', 400:'#1D9E75', 600:'#0F6E56' },
+            coral: { 50:'#FAECE7', 400:'#D85A30', 600:'#993C1D' },
+            amber: { 50:'#FAEEDA', 400:'#BA7517', 600:'#854F0B' },
+            danger:{ 50:'#FCEBEB', 400:'#E24B4A', 600:'#A32D2D' },
+            violet:{ 50:'#EEEDFE', 400:'#7F77DD', 600:'#534AB7' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'DM Sans', sans-serif; }
+    .sidebar-item { transition: all .15s; }
+    .sidebar-item.active { background: #E6F1FB; color: #185FA5; border-left: 3px solid #185FA5; font-weight: 500; }
+    .sidebar-item:not(.active):hover { background: #f8f8f7; }
+    ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-thumb { background: #d1d0c9; border-radius:3px; }
+    .fade-in { animation: fadeIn .25s ease; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+    .pill { display:inline-flex; align-items:center; padding:2px 10px; border-radius:20px; font-size:.7rem; font-weight:500; }
+    .pill-ok  { background:#E1F5EE; color:#0F6E56; }
+    .pill-warn{ background:#FAEEDA; color:#854F0B; }
+    .pill-crit{ background:#FCEBEB; color:#A32D2D; }
+    .pill-info{ background:#E6F1FB; color:#185FA5; }
+    .card { background:#fff; border:1px solid #e9e8e3; border-radius:12px; }
+    .metric-card { background:#f5f4f0; border-radius:8px; padding:14px; }
+    .hidden { display: none !important; }
+    .btn-primary { background:#185FA5; color:#fff; padding:8px 18px; border-radius:8px; font-size:.85rem; font-weight:500; border:none; cursor:pointer; transition:background .15s; }
+    .btn-primary:hover { background:#0C447C; }
+    .btn-secondary { background:#fff; color:#374151; padding:8px 18px; border-radius:8px; font-size:.85rem; font-weight:500; border:1px solid #e9e8e3; cursor:pointer; transition:all .15s; }
+    .btn-secondary:hover { background:#f5f4f0; }
+    input, select, textarea { border:1px solid #e9e8e3; border-radius:8px; padding:8px 12px; font-size:.85rem; width:100%; outline:none; transition:border .15s; font-family:'DM Sans',sans-serif; }
+    input:focus, select:focus, textarea:focus { border-color:#185FA5; box-shadow: 0 0 0 3px rgba(24,95,165,.08); }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="h-full bg-gray-50 text-gray-800">
+
+{% if user.is_authenticated %}
+<div class="flex h-screen overflow-hidden">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar" class="w-56 flex-shrink-0 bg-white border-r border-gray-100 flex flex-col overflow-hidden">
+    <div class="px-4 py-4 border-b border-gray-100">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center flex-shrink-0">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="text-sm font-semibold text-gray-800 leading-tight">SaúdeGestão</div>
+          <div class="text-xs text-gray-400">Rondônia</div>
+        </div>
+      </div>
+    </div>
+
+    <nav class="flex-1 overflow-y-auto py-2 px-2">
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 pt-3 pb-1">Principal</p>
+      <a href="/dashboard/" class="sidebar-item flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 {% block nav_dashboard %}{% endblock %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        Dashboard
+      </a>
+      <a href="/dashboard/organograma/" class="sidebar-item flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 {% block nav_org %}{% endblock %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+        Organograma
+      </a>
+
+      {% if user.pode_ver_tudo %}
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 pt-4 pb-1">Setores</p>
+      <div id="sidebar-setores"></div>
+      {% else %}
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 pt-4 pb-1">Meu Setor</p>
+      {% if user.setor %}
+      <a href="/dashboard/setor/{{ user.setor.codigo }}/" class="sidebar-item flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700">
+        <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:{{ user.setor.cor }}"></span>
+        {{ user.setor.codigo }}
+      </a>
+      {% endif %}
+      {% endif %}
+
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 pt-4 pb-1">Operações</p>
+      <a href="/dashboard/registro/" class="sidebar-item flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 {% block nav_registro %}{% endblock %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Lançar Registro
+      </a>
+      <a href="/dashboard/alertas/" class="sidebar-item flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 {% block nav_alertas %}{% endblock %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+        Alertas <span id="badge-alertas" class="ml-auto text-xs bg-danger-50 text-danger-600 px-2 py-0.5 rounded-full hidden">0</span>
+      </a>
+
+
+    </nav>
+
+    <div class="px-3 py-3 border-t border-gray-100">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 text-xs font-semibold flex-shrink-0">
+          {{ user.iniciais }}
+        </div>
+        <div class="min-w-0">
+          <div class="text-xs font-medium text-gray-800 truncate">{{ user.nome_completo }}</div>
+          <div class="text-xs text-gray-400">{{ user.get_perfil_display }}</div>
+        </div>
+      </div>
+      <form method="post" action="/auth/logout/" class="mt-2">
+        {% csrf_token %}
+        <button type="submit" class="w-full text-xs text-gray-500 hover:text-gray-700 py-1 text-left flex items-center gap-1">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+          Sair
+        </button>
+      </form>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+    <header class="h-12 bg-white border-b border-gray-100 flex items-center justify-between px-6 flex-shrink-0">
+      <h1 class="text-sm font-semibold text-gray-800">{% block page_title %}Dashboard{% endblock %}</h1>
+      <div class="flex items-center gap-3 text-xs text-gray-500">
+        <span>{{ user.setor.codigo|default:"Direção" }}</span>
+        <span class="text-gray-300">|</span>
+        <span id="relogio"></span>
+      </div>
+    </header>
+    <main class="flex-1 overflow-y-auto p-6 fade-in">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+</div>
+{% else %}
+  {% block auth_content %}{% endblock %}
+{% endif %}
+
+<script>
+  // Relógio
+  function tick() {
+    const el = document.getElementById('relogio');
+    if (el) el.textContent = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+  }
+  tick(); setInterval(tick, 1000);
+
+  // Sidebar accordion de setores
+  const GRUPOS = [
+    { tipo: 'direcao',       label: 'Direção',        cor: '#185FA5' },
+    { tipo: 'diretoria',     label: 'Diretorias',     cor: '#0F6E56' },
+    { tipo: 'gerencia',      label: 'Gerências',      cor: '#534AB7' },
+    { tipo: 'assistencial',  label: 'Assistenciais',  cor: '#993C1D' },
+    { tipo: 'administrativo',label: 'Administrativos',cor: '#5F5E5A' },
+    { tipo: 'unidade',       label: 'Unidades',       cor: '#A32D2D' },
+    { tipo: 'comissao',      label: 'Comissões',      cor: '#854F0B' },
+    { tipo: 'nucleo',        label: 'Núcleos',        cor: '#1A6B7A' },
+  ];
+
+  async function carregarSidebarSetores() {
+    const container = document.getElementById('sidebar-setores');
+    if (!container) return;
+    try {
+      const r = await fetch('/api/setores/');
+      const data = await r.json();
+      const setores = data.results || data;
+
+      const pagina = window.location.pathname;
+
+      // Mapa de rotas reais por código de setor.
+      // Adicione aqui qualquer setor que tenha um app próprio.
+      const APP_ROUTES = {
+        'NSP': '/setor/nsp/',
+        'NIR': '/setor/nir/',
+      };
+
+      // Retorna o caminho real do setor (app próprio ou página genérica)
+      function rotaSetor(codigo) {
+        return APP_ROUTES[codigo] || '/dashboard/setor/' + codigo + '/';
+      }
+
+      // Verifica se a página atual corresponde ao setor
+      function setorAtivo(codigo) {
+        const rota = APP_ROUTES[codigo];
+        return rota ? pagina.startsWith(rota) : pagina === '/dashboard/setor/' + codigo + '/';
+      }
+
+      container.innerHTML = GRUPOS.map(g => {
+        const filhos = setores.filter(s => s.tipo === g.tipo);
+        if (!filhos.length) return '';
+        const id = 'acc-' + g.tipo;
+        const aberto = filhos.some(s => setorAtivo(s.codigo));
+
+        return `
+          <div class="mb-0.5">
+            <button onclick="toggleAcc('${id}')"
+              class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+              <span class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${g.cor}"></span>
+                ${g.label}
+              </span>
+              <svg id="${id}-chevron" class="w-3 h-3 text-gray-400 transition-transform ${aberto ? 'rotate-180' : ''}"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </button>
+            <div id="${id}" class="${aberto ? '' : 'hidden'} pl-3">
+              ${filhos.map(s => `
+                <a href="${rotaSetor(s.codigo)}"
+                  class="sidebar-item flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-gray-600 ${setorAtivo(s.codigo) ? 'active' : ''}">
+                  <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:${s.cor}"></span>
+                  <span class="font-mono font-medium">${s.codigo}</span>
+                  <span class="text-gray-400 truncate">${s.nome}</span>
+                </a>`).join('')}
+            </div>
+          </div>`;
+      }).join('');
+    } catch(e) {}
+  }
+
+  function toggleAcc(id) {
+    const el = document.getElementById(id);
+    const chevron = document.getElementById(id + '-chevron');
+    if (!el) return;
+    el.classList.toggle('hidden');
+    chevron?.classList.toggle('rotate-180');
+  }
+
+  carregarSidebarSetores();
+
+  // Badge de alertas
+  async function carregarBadge() {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) return;
+      const r = await fetch('/api/alertas/contagem/', {headers:{'Authorization':'Bearer '+token}});
+      const d = await r.json();
+      const badge = document.getElementById('badge-alertas');
+      if (badge && d.total > 0) {
+        badge.textContent = d.total;
+        badge.classList.remove('hidden');
+      }
+    } catch(e) {}
+  }
+  carregarBadge();
+
+  // CSRF helper
+  function getCookie(name) {
+    let v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+    return v ? v[2] : null;
+  }
+  window.csrfToken = getCookie('csrftoken');
+
+  // Fallback defensivo: remove overlays escuros de tela cheia que não fazem
+  // parte dos modais permitidos do app e acabam bloqueando a interface.
+  function limparOverlaysBloqueandoTela() {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    document.querySelectorAll('body *').forEach((el) => {
+      if (el.dataset.allowOverlay === 'true') return;
+
+      const style = window.getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden') return;
+      if (style.position !== 'fixed') return;
+
+      const rect = el.getBoundingClientRect();
+      const ocupaTela = rect.width >= vw * 0.95 && rect.height >= vh * 0.95;
+      if (!ocupaTela) return;
+
+      const bg = style.backgroundColor || '';
+      const match = bg.match(/rgba?\(([^)]+)\)/);
+      if (!match) return;
+
+      const parts = match[1].split(',').map((p) => parseFloat(p.trim()));
+      const [r, g, b, a = 1] = parts;
+      const escuro = r <= 20 && g <= 20 && b <= 20;
+      const translucido = a >= 0.2;
+
+      if (escuro && translucido) {
+        el.style.display = 'none';
+        el.style.pointerEvents = 'none';
+      }
+    });
+  }
+
+  window.addEventListener('load', limparOverlaysBloqueandoTela);
+  setTimeout(limparOverlaysBloqueandoTela, 300);
+
+  // API helper
+  async function api(url, options={}) {
+    const token = localStorage.getItem('access_token');
+    const headers = {'Content-Type':'application/json', ...(token?{'Authorization':'Bearer '+token}:{})};
+    const r = await fetch(url, {...options, headers:{...headers,...(options.headers||{})}});
+    return r.json();
+  }
+</script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

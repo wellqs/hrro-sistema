@@ -1,0 +1,215 @@
+{% extends "base/base.html" %}
+{% block title %}Painel de Leitos — NIR{% endblock %}
+{% block nav_nir %}active{% endblock %}
+{% block page_title %}Painel de Leitos{% endblock %}
+
+{% block content %}
+{% include "nir/_setor_header.html" %}
+<div id="painel-root">
+
+  <!-- Totais gerais -->
+  <div id="totais" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div>
+
+  <!-- Legenda -->
+  <div class="flex items-center gap-4 mb-5 flex-wrap">
+    <span class="text-xs text-gray-400 font-medium">Legenda:</span>
+    <span class="flex items-center gap-1.5 text-xs text-gray-600"><span class="w-3 h-3 rounded-sm inline-block" style="background:#1D9E75"></span>Livre</span>
+    <span class="flex items-center gap-1.5 text-xs text-gray-600"><span class="w-3 h-3 rounded-sm inline-block" style="background:#E24B4A"></span>Ocupado</span>
+    <span class="flex items-center gap-1.5 text-xs text-gray-600"><span class="w-3 h-3 rounded-sm inline-block" style="background:#BA7517"></span>Reservado</span>
+    <span class="flex items-center gap-1.5 text-xs text-gray-600"><span class="w-3 h-3 rounded-sm inline-block" style="background:#378ADD"></span>Em Limpeza</span>
+    <span class="flex items-center gap-1.5 text-xs text-gray-600"><span class="w-3 h-3 rounded-sm inline-block" style="background:#d1d0c9"></span>Bloqueado</span>
+  </div>
+
+  <!-- Grid de clínicas -->
+  <div id="clinicas" class="space-y-5"></div>
+
+</div>
+
+<!-- Modal de edição de leito -->
+<div id="modal-leito" data-allow-overlay="true" class="fixed inset-0 bg-black/40 z-50 hidden">
+  <div class="min-h-full flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-sm font-semibold text-gray-800">Leito <span id="modal-numero"></span></h3>
+      <button onclick="fecharModal()" class="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Status</label>
+        <select id="modal-status" class="text-sm">
+          {% for valor, label in status_choices %}
+          <option value="{{ valor }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div id="campo-paciente">
+        <label class="block text-xs font-medium text-gray-600 mb-1">Nome do Paciente</label>
+        <input type="text" id="modal-paciente" class="text-sm" placeholder="Nome completo">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Observação</label>
+        <input type="text" id="modal-obs" class="text-sm" placeholder="Opcional">
+      </div>
+      <div id="modal-erro" class="hidden text-xs text-danger-600 bg-danger-50 rounded-lg px-3 py-2"></div>
+      <div class="flex gap-2 pt-1">
+        <button onclick="salvarLeito()" class="btn-primary flex-1">Salvar</button>
+        <button onclick="fecharModal()" class="btn-secondary">Cancelar</button>
+      </div>
+    </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.tab-btn.active-tab { color:#185FA5; border-bottom-color:#185FA5; }
+.leito {
+  width: 36px; height: 36px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .6rem; font-weight: 600; font-family: 'DM Mono', monospace;
+  cursor: pointer; transition: transform .1s, box-shadow .1s;
+  color: white; position: relative;
+}
+.leito:hover { transform: scale(1.12); box-shadow: 0 2px 8px rgba(0,0,0,.18); z-index: 1; }
+.leito.livre     { background: #1D9E75; }
+.leito.ocupado   { background: #E24B4A; }
+.leito.reservado { background: #BA7517; }
+.leito.limpeza   { background: #378ADD; }
+.leito.bloqueado { background: #d1d0c9; color: #6b7280; }
+
+.clinica-header { border-left: 4px solid var(--cor); padding-left: 10px; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let leitoSelecionado = null;
+
+const STATUS_COR = {
+  livre:'#1D9E75', ocupado:'#E24B4A', reservado:'#BA7517',
+  limpeza:'#378ADD', bloqueado:'#d1d0c9'
+};
+const STATUS_LABEL = {
+  livre:'Livre', ocupado:'Ocupado', reservado:'Reservado',
+  limpeza:'Em Limpeza', bloqueado:'Bloqueado'
+};
+
+async function init() {
+  try {
+    const d = await api('/api/setor/nir/painel/');
+    renderTotais(d.totais);
+    renderClinicas(d.clinicas);
+  } catch(e) { console.error(e); }
+}
+
+function renderTotais(t) {
+  document.getElementById('totais').innerHTML = `
+    <div class="metric-card">
+      <div class="text-xs text-gray-500 mb-1">Total de Leitos</div>
+      <div class="text-2xl font-semibold text-gray-800">${t.geral}</div>
+    </div>
+    <div class="metric-card">
+      <div class="text-xs text-gray-500 mb-1">Livres</div>
+      <div class="text-2xl font-semibold text-teal-600">${t.livre}</div>
+      <div class="text-xs text-gray-400 mt-1">${t.geral ? Math.round(t.livre/t.geral*100) : 0}% disponível</div>
+    </div>
+    <div class="metric-card">
+      <div class="text-xs text-gray-500 mb-1">Ocupados</div>
+      <div class="text-2xl font-semibold text-danger-600">${t.ocupado}</div>
+      <div class="text-xs text-gray-400 mt-1">${t.geral ? Math.round(t.ocupado/t.geral*100) : 0}% ocupação</div>
+    </div>
+    <div class="metric-card">
+      <div class="text-xs text-gray-500 mb-1">Reservados / Outros</div>
+      <div class="text-2xl font-semibold text-amber-600">${t.reservado + t.outros}</div>
+    </div>`;
+}
+
+function renderClinicas(clinicas) {
+  const el = document.getElementById('clinicas');
+  el.innerHTML = clinicas.map(c => `
+    <div class="card p-5">
+      <div class="flex items-center justify-between mb-4">
+        <div class="clinica-header" style="--cor:${c.cor}">
+          <h2 class="text-sm font-semibold text-gray-800">${c.nome}</h2>
+          <p class="text-xs text-gray-400 mt-0.5">
+            ${c.resumo.livre} livres · ${c.resumo.ocupado} ocupados
+            ${c.resumo.reservado ? ` · ${c.resumo.reservado} reservados` : ''}
+            ${c.resumo.outros ? ` · ${c.resumo.outros} outros` : ''}
+            · ${c.capacidade} total
+          </p>
+        </div>
+        <div class="text-right">
+          <div class="text-xs text-gray-400">Ocupação</div>
+          <div class="text-lg font-semibold" style="color:${c.cor}">
+            ${c.capacidade ? Math.round(c.resumo.ocupado/c.capacidade*100) : 0}%
+          </div>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-1.5">
+        ${c.leitos.map(l => `
+          <div class="leito ${l.status}" title="${l.numero}${l.paciente_nome ? ' — ' + l.paciente_nome : ''}\nStatus: ${STATUS_LABEL[l.status]||l.status}"
+            onclick="abrirModal(${l.id}, '${l.numero}', '${l.status}', '${(l.paciente_nome||'').replace(/'/g,"\\'")}', '${(l.observacao||'').replace(/'/g,"\\'")}')">
+            ${l.numero.replace(/^[A-Z]-/,'')}
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function abrirModal(id, numero, status, paciente, obs) {
+  leitoSelecionado = id;
+  document.getElementById('modal-numero').textContent = numero;
+  document.getElementById('modal-status').value   = status;
+  document.getElementById('modal-paciente').value = paciente;
+  document.getElementById('modal-obs').value      = obs;
+  document.getElementById('modal-erro').classList.add('hidden');
+  toggleCampoPaciente(status);
+  document.getElementById('modal-leito').classList.remove('hidden');
+}
+
+function fecharModal() {
+  document.getElementById('modal-leito').classList.add('hidden');
+  leitoSelecionado = null;
+}
+
+function toggleCampoPaciente(status) {
+  document.getElementById('campo-paciente').style.display = status === 'ocupado' ? '' : 'none';
+}
+
+document.getElementById('modal-status').addEventListener('change', function() {
+  toggleCampoPaciente(this.value);
+});
+
+async function salvarLeito() {
+  if (!leitoSelecionado) return;
+  const status   = document.getElementById('modal-status').value;
+  const paciente = document.getElementById('modal-paciente').value.trim();
+  const obs      = document.getElementById('modal-obs').value.trim();
+  const erro     = document.getElementById('modal-erro');
+  erro.classList.add('hidden');
+
+  try {
+    const r = await api(`/api/setor/nir/leitos/${leitoSelecionado}/status/`, {
+      method: 'POST',
+      body: JSON.stringify({ status, paciente_nome: paciente, observacao: obs })
+    });
+    if (r.id) {
+      fecharModal();
+      init();
+    } else {
+      erro.textContent = Object.values(r).flat().join(' | ') || 'Erro ao salvar.';
+      erro.classList.remove('hidden');
+    }
+  } catch(e) {
+    erro.textContent = 'Erro de comunicação.';
+    erro.classList.remove('hidden');
+  }
+}
+
+// Fechar modal clicando fora
+document.getElementById('modal-leito').addEventListener('click', function(e) {
+  if (e.target === this) fecharModal();
+});
+
+init();
+</script>
+{% endblock %}

@@ -1,0 +1,234 @@
+{% extends "base/base.html" %}
+{% block title %}NSP — Segurança do Paciente{% endblock %}
+{% block nav_nsp %}active{% endblock %}
+{% block page_title %}Núcleo de Segurança do Paciente{% endblock %}
+
+{% block content %}
+<div id="nsp-root">
+
+  <!-- Métricas principais -->
+  <div id="metricas-nsp" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div>
+
+  <!-- Grid central -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
+
+    <!-- Gráfico de tendência -->
+    <div class="lg:col-span-2 card p-5">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-sm font-semibold text-gray-800">Tendência de Notificações</h2>
+          <p class="text-xs text-gray-400 mt-0.5">Incidentes notificados por mês</p>
+        </div>
+      </div>
+      <div style="position:relative; height:220px;">
+        <canvas id="chart-tendencia"></canvas>
+      </div>
+    </div>
+
+    <!-- Por tipo -->
+    <div class="card p-5">
+      <h2 class="text-sm font-semibold text-gray-800 mb-4">Por Tipo (mês atual)</h2>
+      <div id="lista-tipos" class="space-y-2"></div>
+    </div>
+  </div>
+
+  <!-- Metas de Segurança + Notificações recentes -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+    <!-- Metas OMS -->
+    <div class="card p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-gray-800">Metas de Segurança</h2>
+        <span class="text-xs text-gray-400">pendentes por meta</span>
+      </div>
+      <div id="lista-metas" class="space-y-3"></div>
+    </div>
+
+    <!-- Notificações recentes -->
+    <div class="lg:col-span-2 card p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-gray-800">Notificações Recentes</h2>
+        <a href="/setor/nsp/notificacao/" class="btn-primary text-xs">+ Nova Notificação</a>
+      </div>
+      <div id="tabela-recentes"></div>
+    </div>
+  </div>
+
+</div>
+
+<style>
+.dano-nenhum  { background:#E1F5EE; color:#0F6E56; }
+.dano-leve    { background:#E6F1FB; color:#185FA5; }
+.dano-moderado{ background:#FAEEDA; color:#854F0B; }
+.dano-grave   { background:#FCEBEB; color:#A32D2D; }
+.dano-obito   { background:#2d1b1b; color:#fff; }
+.status-aberta     { background:#FCEBEB; color:#A32D2D; }
+.status-em_analise { background:#FAEEDA; color:#854F0B; }
+.status-concluida  { background:#E1F5EE; color:#0F6E56; }
+.status-arquivada  { background:#f5f4f0; color:#9ca3af; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const TIPO_LABEL = {
+  queda:'Queda de Paciente', lpp:'Lesão por Pressão',
+  erro_medicacao:'Erro de Medicação', identificacao:'Falha na Identificação',
+  cirurgia:'Cirurgia em Local Errado', transfusao:'Reação Transfusional',
+  infeccao:'Infecção Associada', comunicacao:'Falha de Comunicação', outro:'Outro'
+};
+const TIPO_COR = {
+  queda:'#A32D2D', lpp:'#993C1D', erro_medicacao:'#854F0B',
+  identificacao:'#534AB7', cirurgia:'#185FA5', transfusao:'#0F6E56',
+  infeccao:'#BA7517', comunicacao:'#5F5E5A', outro:'#9ca3af'
+};
+const META_LABEL = {
+  meta_1:'Meta 1 — Identificação', meta_2:'Meta 2 — Comunicação',
+  meta_3:'Meta 3 — Medicamentos', meta_4:'Meta 4 — Cirurgia Segura',
+  meta_5:'Meta 5 — Higiene das Mãos', meta_6:'Meta 6 — Quedas e LPP'
+};
+const DANO_LABEL = {nenhum:'Sem Dano',leve:'Leve',moderado:'Moderado',grave:'Grave',obito:'Óbito'};
+const STATUS_LABEL = {aberta:'Aberta',em_analise:'Em Análise',concluida:'Concluída',arquivada:'Arquivada'};
+
+let chartTendencia = null;
+
+async function init() {
+  try {
+    const d = await api('/api/setor/nsp/dashboard/');
+    renderMetricas(d);
+    renderTendencia(d.tendencia);
+    renderTipos(d.por_tipo);
+    renderMetas(d.por_meta);
+    renderRecentes(d.recentes);
+  } catch(e) { console.error(e); }
+}
+
+function renderMetricas(d) {
+  document.getElementById('metricas-nsp').innerHTML = `
+    <div class="metric-card">
+      <div class="text-xs text-gray-500 mb-1">Notificações no Mês</div>
+      <div class="text-2xl font-semibold text-gray-800">${d.total_mes ?? 0}</div>
+      <div class="text-xs text-gray-400 mt-1">mês corrente</div>
+    </div>
+    <div class="metric-card">
+      <div class="text-xs text-gray-500 mb-1">Abertas</div>
+      <div class="text-2xl font-semibold ${(d.abertas??0)>0?'text-danger-600':'text-gray-800'}">${d.abertas ?? 0}</div>
+      <div class="text-xs text-gray-400 mt-1">${(d.abertas??0)>0?'requer análise':'nenhuma pendente'}</div>
+    </div>
+    <div class="metric-card">
+      <div class="text-xs text-gray-500 mb-1">Em Análise</div>
+      <div class="text-2xl font-semibold text-amber-600">${d.em_analise ?? 0}</div>
+      <div class="text-xs text-gray-400 mt-1">em andamento</div>
+    </div>
+    <div class="metric-card">
+      <div class="text-xs text-gray-500 mb-1">Graves / Óbitos</div>
+      <div class="text-2xl font-semibold ${(d.graves_mes??0)>0?'text-danger-600':'text-gray-800'}">${d.graves_mes ?? 0}</div>
+      <div class="text-xs text-gray-400 mt-1">este mês</div>
+    </div>`;
+}
+
+function renderTendencia(dados) {
+  const ctx = document.getElementById('chart-tendencia');
+  if (!ctx) return;
+  if (chartTendencia) chartTendencia.destroy();
+  const labels = dados.map(d=>d.mes);
+  const values = dados.map(d=>d.total);
+  chartTendencia = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels.length ? labels : ['—'],
+      datasets: [{
+        label: 'Notificações',
+        data: values.length ? values : [0],
+        borderColor: '#993C1D',
+        backgroundColor: '#993C1D22',
+        tension: 0.4, fill: true, pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { grid:{color:'#f0efea'}, ticks:{font:{size:11},color:'#9ca3af'} },
+        x: { grid:{display:false}, ticks:{font:{size:10},color:'#6b7280'} }
+      }
+    }
+  });
+}
+
+function renderTipos(dados) {
+  const el = document.getElementById('lista-tipos');
+  if (!dados.length) {
+    el.innerHTML = '<p class="text-xs text-gray-400">Nenhuma notificação no mês.</p>';
+    return;
+  }
+  const max = Math.max(...dados.map(d=>d.total));
+  el.innerHTML = dados.map(d => `
+    <div>
+      <div class="flex justify-between text-xs mb-1">
+        <span class="text-gray-600 truncate">${TIPO_LABEL[d.tipo]||d.tipo}</span>
+        <span class="font-semibold text-gray-800 ml-2 flex-shrink-0">${d.total}</span>
+      </div>
+      <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div class="h-full rounded-full" style="width:${Math.round((d.total/max)*100)}%;background:${TIPO_COR[d.tipo]||'#888'}"></div>
+      </div>
+    </div>`).join('');
+}
+
+function renderMetas(dados) {
+  const el = document.getElementById('lista-metas');
+  const todasMetas = ['meta_1','meta_2','meta_3','meta_4','meta_5','meta_6'];
+  const mapa = Object.fromEntries(dados.map(d=>[d.meta_relacionada, d.total]));
+  el.innerHTML = todasMetas.map(meta => {
+    const total = mapa[meta] || 0;
+    const cor = total > 3 ? '#E24B4A' : total > 0 ? '#BA7517' : '#1D9E75';
+    const bgCor = total > 3 ? '#FCEBEB' : total > 0 ? '#FAEEDA' : '#E1F5EE';
+    return `<div class="flex items-center justify-between p-2 rounded-lg" style="background:${bgCor}">
+      <span class="text-xs text-gray-700">${META_LABEL[meta]||meta}</span>
+      <span class="text-xs font-semibold ml-2 flex-shrink-0" style="color:${cor}">${total}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderRecentes(dados) {
+  const el = document.getElementById('tabela-recentes');
+  if (!dados.length) {
+    el.innerHTML = '<p class="text-xs text-gray-400 py-4">Nenhuma notificação registrada. <a href="/setor/nsp/notificacao/" class="text-brand-600 hover:underline">Registrar a primeira</a>.</p>';
+    return;
+  }
+  el.innerHTML = `<table class="w-full text-xs">
+    <thead><tr class="border-b border-gray-100">
+      <th class="text-left py-2 text-gray-400 font-medium">Data</th>
+      <th class="text-left py-2 text-gray-400 font-medium">Setor</th>
+      <th class="text-left py-2 text-gray-400 font-medium">Tipo</th>
+      <th class="text-left py-2 text-gray-400 font-medium">Dano</th>
+      <th class="text-left py-2 text-gray-400 font-medium">Status</th>
+      <th class="text-left py-2 text-gray-400 font-medium">Ação</th>
+    </tr></thead>
+    <tbody>
+      ${dados.map(n=>`
+      <tr class="border-b border-gray-50 hover:bg-gray-50">
+        <td class="py-2 text-gray-500">${n.data_ocorrencia}</td>
+        <td class="py-2 font-semibold text-gray-700">${n.setor_codigo}</td>
+        <td class="py-2 text-gray-600">${TIPO_LABEL[n.tipo]||n.tipo}</td>
+        <td class="py-2"><span class="pill dano-${n.dano}">${DANO_LABEL[n.dano]||n.dano}</span></td>
+        <td class="py-2"><span class="pill status-${n.status}">${STATUS_LABEL[n.status]||n.status}</span></td>
+        <td class="py-2">
+          ${n.status==='aberta'?`<button onclick="analisar(${n.id})" class="text-brand-600 hover:underline">Analisar</button>`:'—'}
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function analisar(id) {
+  await api('/api/setor/nsp/notificacoes/'+id+'/analisar/', {
+    method: 'POST',
+    body: JSON.stringify({status:'em_analise'})
+  });
+  init();
+}
+
+init();
+</script>
+{% endblock %}

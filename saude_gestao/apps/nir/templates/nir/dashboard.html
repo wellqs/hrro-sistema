@@ -1,0 +1,170 @@
+{% extends "base/base.html" %}
+{% block title %}NIR - Nucleo Interno de Regulacao{% endblock %}
+{% block nav_nir %}active{% endblock %}
+{% block page_title %}Nucleo Interno de Regulacao{% endblock %}
+
+{% block content %}
+{% include "nir/_setor_header.html" with nir_action_url="/setor/nir/solicitacoes/nova/" nir_action_label="+ Nova Solicitacao" %}
+
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+  <div class="card p-5">
+    <div class="flex items-center gap-4">
+      <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style="background:#E1F5EE">
+        <svg class="w-5 h-5" style="color:#0F6E56" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+        </svg>
+      </div>
+      <div class="min-w-0">
+        <div class="text-sm font-semibold text-gray-800">Painel de Leitos</div>
+        <div class="text-xs text-gray-400 mt-0.5">Ocupacao em tempo real por clinica</div>
+        <div id="resumo-painel" class="flex gap-3 mt-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-5">
+    <div class="flex items-center gap-4">
+      <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style="background:#E6F1FB">
+        <svg class="w-5 h-5" style="color:#185FA5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+        </svg>
+      </div>
+      <div class="min-w-0">
+        <div class="text-sm font-semibold text-gray-800">Solicitacoes de Regulacao</div>
+        <div class="text-xs text-gray-400 mt-0.5">Transferencias, vagas e procedimentos</div>
+        <div id="resumo-solicitacoes" class="flex gap-3 mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="metricas" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+  <div class="lg:col-span-2 card p-5">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-sm font-semibold text-gray-800">Tendencia de Solicitacoes</h2>
+        <p class="text-xs text-gray-400 mt-0.5">Solicitacoes registradas por mes</p>
+      </div>
+    </div>
+    <div style="position:relative;height:200px">
+      <canvas id="chart-tendencia"></canvas>
+    </div>
+  </div>
+
+  <div class="card p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold text-gray-800">Pendentes por Prioridade</h2>
+      <a href="/setor/nir/solicitacoes/" class="text-xs text-brand-600 hover:underline">Ver todas</a>
+    </div>
+    <div id="lista-prioridades" class="space-y-3"></div>
+  </div>
+</div>
+
+<style>
+.tab-btn.active-tab { color:#185FA5; border-bottom-color:#185FA5; }
+.nav-badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:20px; font-size:.65rem; font-weight:600; }
+.prioridade-eletivo    { background:#E6F1FB; color:#185FA5; }
+.prioridade-urgencia   { background:#FAEEDA; color:#854F0B; }
+.prioridade-emergencia { background:#FCEBEB; color:#A32D2D; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const PRIO_LABEL = { eletivo:'Eletivo', urgencia:'Urgencia', emergencia:'Emergencia' };
+let chartTendencia = null;
+
+async function init() {
+  try {
+    const [dash, painel] = await Promise.all([
+      api('/api/setor/nir/dashboard/'),
+      api('/api/setor/nir/painel/'),
+    ]);
+    renderResumoPainel(painel.totais);
+    renderResumoSolicitacoes(dash);
+    renderMetricas(dash);
+    renderTendencia(dash.tendencia);
+    renderPrioridades(dash.por_prioridade);
+  } catch(e) { console.error(e); }
+}
+
+function renderResumoPainel(t) {
+  document.getElementById('resumo-painel').innerHTML = `
+    <span class="nav-badge" style="background:#E1F5EE;color:#0F6E56">${t.livre} livres</span>
+    <span class="nav-badge" style="background:#FCEBEB;color:#A32D2D">${t.ocupado} ocupados</span>
+    <span class="nav-badge" style="background:#f5f4f0;color:#6b7280">${t.geral} total</span>`;
+}
+
+function renderResumoSolicitacoes(d) {
+  document.getElementById('resumo-solicitacoes').innerHTML = `
+    <span class="nav-badge" style="background:#FCEBEB;color:#A32D2D">${d.solicitadas} aguardando</span>
+    <span class="nav-badge" style="background:#FAEEDA;color:#854F0B">${d.em_regulacao} em regulacao</span>`;
+}
+
+function renderMetricas(d) {
+  document.getElementById('metricas').innerHTML = `
+    <div class="metric-card">
+      <div class="text-xs text-gray-500 mb-1">Solicitacoes no Mes</div>
+      <div class="text-2xl font-semibold text-gray-800">${d.total_mes ?? 0}</div>
+      <div class="text-xs text-gray-400 mt-1">mes corrente</div>
+    </div>
+    <div class="metric-card">
+      <div class="text-xs text-gray-500 mb-1">Aguardando</div>
+      <div class="text-2xl font-semibold ${(d.solicitadas??0)>0?'text-danger-600':'text-gray-800'}">${d.solicitadas ?? 0}</div>
+      <div class="text-xs text-gray-400 mt-1">${(d.solicitadas??0)>0?'requer acao':'nenhuma pendente'}</div>
+    </div>
+    <div class="metric-card">
+      <div class="text-xs text-gray-500 mb-1">Em Regulacao</div>
+      <div class="text-2xl font-semibold text-amber-600">${d.em_regulacao ?? 0}</div>
+      <div class="text-xs text-gray-400 mt-1">em andamento</div>
+    </div>
+    <div class="metric-card">
+      <div class="text-xs text-gray-500 mb-1">Emergencias Abertas</div>
+      <div class="text-2xl font-semibold ${(d.emergencias_abertas??0)>0?'text-danger-600':'text-gray-800'}">${d.emergencias_abertas ?? 0}</div>
+      <div class="text-xs text-gray-400 mt-1">${(d.emergencias_abertas??0)>0?'atencao imediata':'nenhuma'}</div>
+    </div>`;
+}
+
+function renderTendencia(dados) {
+  const ctx = document.getElementById('chart-tendencia');
+  if (!ctx) return;
+  if (chartTendencia) chartTendencia.destroy();
+  chartTendencia = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: dados.length ? dados.map(d => d.mes) : ['-'],
+      datasets: [{
+        label: 'Solicitacoes',
+        data: dados.length ? dados.map(d => d.total) : [0],
+        borderColor: '#185FA5', backgroundColor: '#185FA522',
+        tension: 0.4, fill: true, pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { grid:{color:'#f0efea'}, ticks:{font:{size:11},color:'#9ca3af'} },
+        x: { grid:{display:false}, ticks:{font:{size:10},color:'#6b7280'} }
+      }
+    }
+  });
+}
+
+function renderPrioridades(dados) {
+  const el = document.getElementById('lista-prioridades');
+  const mapa = Object.fromEntries(dados.map(d => [d.prioridade, d.total]));
+  el.innerHTML = ['emergencia','urgencia','eletivo'].map(prio => {
+    const total = mapa[prio] || 0;
+    return `<div class="flex items-center justify-between p-2.5 rounded-lg prioridade-${prio}">
+      <span class="text-xs font-medium">${PRIO_LABEL[prio]}</span>
+      <span class="text-sm font-semibold">${total}</span>
+    </div>`;
+  }).join('');
+}
+
+init();
+</script>
+{% endblock %}

@@ -1,0 +1,204 @@
+{% extends "base/base.html" %}
+{% block title %}Notificação #{{ notificacao.id }} — NSP{% endblock %}
+{% block nav_nsp %}active{% endblock %}
+{% block page_title %}Detalhe da Notificação{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div class="mb-4 flex items-center gap-2 text-xs text-gray-400">
+  <a href="/setor/nsp/" class="hover:text-brand-600">NSP</a>
+  <span>›</span>
+  <a href="/setor/nsp/notificacoes/" class="hover:text-brand-600">Notificações</a>
+  <span>›</span>
+  <span class="text-gray-600">#{{ notificacao.id }}</span>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+  <!-- Coluna principal: detalhes -->
+  <div class="lg:col-span-2 space-y-5">
+
+    <!-- Header da notificação -->
+    <div class="card p-5">
+      <div class="flex items-start justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-coral-50 flex items-center justify-center flex-shrink-0">
+            <svg class="w-5 h-5 text-coral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            </svg>
+          </div>
+          <div>
+            <h2 class="text-sm font-semibold text-gray-800">{{ notificacao.get_tipo_display }}</h2>
+            <p class="text-xs text-gray-400 mt-0.5">Notificação #{{ notificacao.id }} — {{ notificacao.setor.codigo }}</p>
+          </div>
+        </div>
+        <span class="pill status-{{ notificacao.status }} text-xs">{{ notificacao.get_status_display }}</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 text-xs mb-4">
+        <div>
+          <div class="text-gray-400 mb-1">Setor</div>
+          <div class="font-semibold text-gray-800">{{ notificacao.setor.codigo }} — {{ notificacao.setor.nome }}</div>
+        </div>
+        <div>
+          <div class="text-gray-400 mb-1">Data / Hora</div>
+          <div class="font-semibold text-gray-800">
+            {{ notificacao.data_ocorrencia }}
+            {% if notificacao.hora_ocorrencia %}às {{ notificacao.hora_ocorrencia|time:"H:i" }}{% endif %}
+          </div>
+        </div>
+        <div>
+          <div class="text-gray-400 mb-1">Nível de Dano</div>
+          <span class="pill dano-{{ notificacao.dano }}">{{ notificacao.get_dano_display }}</span>
+        </div>
+        <div>
+          <div class="text-gray-400 mb-1">Meta de Segurança</div>
+          <div class="font-medium text-brand-600">
+            {% if notificacao.meta_relacionada %}{{ notificacao.get_meta_relacionada_display }}{% else %}—{% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="text-xs text-gray-400 mb-2">Descrição do Incidente</div>
+        <div class="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 leading-relaxed">{{ notificacao.descricao }}</div>
+      </div>
+
+      <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
+        <span>Notificado por <span class="text-gray-600 font-medium">{{ notificacao.notificado_por.nome_completo|default:"—" }}</span></span>
+        <span>{{ notificacao.criado_em|date:"d/m/Y H:i" }}</span>
+      </div>
+    </div>
+
+    <!-- Plano de ação (se existir) -->
+    {% if notificacao.plano_acao %}
+    <div class="card p-5">
+      <h3 class="text-sm font-semibold text-gray-800 mb-3">Plano de Ação</h3>
+      <div class="text-sm text-gray-700 bg-teal-50 rounded-lg p-3 leading-relaxed border border-teal-100">
+        {{ notificacao.plano_acao }}
+      </div>
+      {% if notificacao.analisado_por %}
+      <div class="mt-3 text-xs text-gray-400">
+        Analisado por <span class="text-gray-600 font-medium">{{ notificacao.analisado_por.nome_completo }}</span>
+        em {{ notificacao.atualizado_em|date:"d/m/Y H:i" }}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- Coluna lateral: ações -->
+  <div class="space-y-4">
+
+    <!-- Painel de análise -->
+    {% if notificacao.status != 'arquivada' and notificacao.status != 'concluida' %}
+    <div class="card p-5">
+      <h3 class="text-sm font-semibold text-gray-800 mb-4">Analisar Notificação</h3>
+
+      <div id="msg-ok" class="hidden mb-3 p-2 bg-teal-50 text-teal-600 rounded-lg text-xs border border-teal-100">
+        Atualizado com sucesso.
+      </div>
+      <div id="msg-err" class="hidden mb-3 p-2 bg-danger-50 text-danger-600 rounded-lg text-xs border border-danger-100"></div>
+
+      <form id="form-analise" class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Novo Status</label>
+          <select id="sel-status" class="w-full text-sm">
+            {% for valor, label in status_choices %}
+            <option value="{{ valor }}" {% if valor == notificacao.status %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Plano de Ação</label>
+          <textarea id="inp-plano" rows="5" placeholder="Descreva as ações corretivas e preventivas..."
+            class="w-full resize-none text-sm">{{ notificacao.plano_acao }}</textarea>
+        </div>
+        <button type="submit" class="btn-primary w-full text-sm">Salvar Análise</button>
+      </form>
+    </div>
+    {% endif %}
+
+    <!-- Metadados -->
+    <div class="card p-5">
+      <h3 class="text-sm font-semibold text-gray-800 mb-3">Informações</h3>
+      <div class="space-y-2 text-xs">
+        <div class="flex justify-between">
+          <span class="text-gray-400">ID</span>
+          <span class="font-mono text-gray-700">#{{ notificacao.id }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-400">Criado em</span>
+          <span class="text-gray-700">{{ notificacao.criado_em|date:"d/m/Y H:i" }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-400">Atualizado</span>
+          <span class="text-gray-700">{{ notificacao.atualizado_em|date:"d/m/Y H:i" }}</span>
+        </div>
+        {% if notificacao.analisado_por %}
+        <div class="flex justify-between">
+          <span class="text-gray-400">Analisado por</span>
+          <span class="text-gray-700">{{ notificacao.analisado_por.nome_completo }}</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <a href="/setor/nsp/notificacoes/" class="btn-secondary w-full block text-center text-sm">
+      ← Voltar à lista
+    </a>
+
+  </div>
+</div>
+
+<style>
+.dano-nenhum  { background:#E1F5EE; color:#0F6E56; }
+.dano-leve    { background:#E6F1FB; color:#185FA5; }
+.dano-moderado{ background:#FAEEDA; color:#854F0B; }
+.dano-grave   { background:#FCEBEB; color:#A32D2D; }
+.dano-obito   { background:#2d1b1b; color:#fff; }
+.status-aberta     { background:#FCEBEB; color:#A32D2D; }
+.status-em_analise { background:#FAEEDA; color:#854F0B; }
+.status-concluida  { background:#E1F5EE; color:#0F6E56; }
+.status-arquivada  { background:#f5f4f0; color:#9ca3af; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const form = document.getElementById('form-analise');
+if (form) {
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = this.querySelector('[type=submit]');
+    btn.disabled = true; btn.textContent = 'Salvando...';
+    try {
+      const r = await fetch('/api/setor/nsp/notificacoes/{{ notificacao.id }}/analisar/', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json', 'X-CSRFToken': window.csrfToken},
+        body: JSON.stringify({
+          status: document.getElementById('sel-status').value,
+          plano_acao: document.getElementById('inp-plano').value,
+        }),
+        credentials: 'include',
+      });
+      if (r.ok) {
+        document.getElementById('msg-ok').classList.remove('hidden');
+        document.getElementById('msg-err').classList.add('hidden');
+        setTimeout(() => location.reload(), 1200);
+      } else {
+        const d = await r.json();
+        document.getElementById('msg-err').textContent = JSON.stringify(d);
+        document.getElementById('msg-err').classList.remove('hidden');
+      }
+    } catch(err) {
+      document.getElementById('msg-err').textContent = 'Erro de conexão.';
+      document.getElementById('msg-err').classList.remove('hidden');
+    }
+    btn.disabled = false; btn.textContent = 'Salvar Análise';
+  });
+}
+</script>
+{% endblock %}

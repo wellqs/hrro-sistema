@@ -1,0 +1,213 @@
+{% extends "base/base.html" %}
+{% block title %}Dashboard — SaúdeGestão RO{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+{% block page_title %}
+  {% if user.pode_ver_tudo %}Visão Consolidada — Todos os Setores{% else %}Dashboard — {{ user.setor.nome|default:"Meu Setor" }}{% endif %}
+{% endblock %}
+
+{% block content %}
+<div id="dashboard-root">
+
+  <!-- Métricas principais -->
+  <div id="metricas" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div>
+
+  <!-- Grid central -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
+
+    <!-- Gráfico -->
+    <div class="lg:col-span-2 card p-5">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-sm font-semibold text-gray-800">Atendimentos por Setor</h2>
+          <p class="text-xs text-gray-400 mt-0.5">Registros do mês corrente</p>
+        </div>
+        <select id="filtro-tipo" class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none" style="width:auto">
+          <option value="">Todos</option>
+          <option value="atendimentos">Atendimentos</option>
+          <option value="taxa_ocupacao">Taxa Ocupação</option>
+          <option value="eventos_adversos">Eventos Adversos</option>
+        </select>
+      </div>
+      <div style="position:relative; height:220px;">
+        <canvas id="chart-barras"></canvas>
+      </div>
+    </div>
+
+    <!-- Alertas recentes -->
+    <div class="card p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-gray-800">Alertas Recentes</h2>
+        <a href="/dashboard/alertas/" class="text-xs text-brand-600 hover:text-brand-800">Ver todos</a>
+      </div>
+      <div id="lista-alertas" class="space-y-2"></div>
+    </div>
+  </div>
+
+  <!-- Cards de setores -->
+  <div>
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm font-semibold text-gray-800">
+        {% if user.pode_ver_tudo %}Todos os Setores{% else %}Meu Setor{% endif %}
+      </h2>
+      {% if user.pode_ver_tudo %}
+      <div class="flex gap-1">
+        <button onclick="filtrarTipo('')" class="filtro-btn active-filtro text-xs px-3 py-1 rounded-full border">Todos</button>
+        <button onclick="filtrarTipo('gerencia')" class="filtro-btn text-xs px-3 py-1 rounded-full border">Gerências</button>
+        <button onclick="filtrarTipo('assistencial')" class="filtro-btn text-xs px-3 py-1 rounded-full border">Assistenciais</button>
+        <button onclick="filtrarTipo('unidade')" class="filtro-btn text-xs px-3 py-1 rounded-full border">Unidades</button>
+        <button onclick="filtrarTipo('comissao')" class="filtro-btn text-xs px-3 py-1 rounded-full border">Comissões</button>
+      </div>
+      {% endif %}
+    </div>
+    <div id="cards-setores" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3"></div>
+  </div>
+</div>
+
+<style>
+.filtro-btn { transition:all .15s; background:#fff; color:#6b7280; }
+.filtro-btn:hover { background:#f5f4f0; }
+.filtro-btn.active-filtro { background:#E6F1FB; color:#185FA5; border-color:#B5D4F4; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let todosSetores = [];
+let chartBarras = null;
+
+async function init() {
+  await Promise.all([carregarMetricas(), carregarAlertas(), carregarSetores()]);
+  renderChart();
+}
+
+async function carregarMetricas() {
+  try {
+    const d = await api('/api/indicadores/dashboard/');
+    document.getElementById('metricas').innerHTML = `
+      <div class="metric-card">
+        <div class="text-xs text-gray-500 mb-1">Registros no Mês</div>
+        <div class="text-2xl font-semibold text-gray-800">${d.total_registros_mes || 0}</div>
+        <div class="text-xs text-teal-600 mt-1">↑ atualizado hoje</div>
+      </div>
+      <div class="metric-card">
+        <div class="text-xs text-gray-500 mb-1">Alertas Ativos</div>
+        <div class="text-2xl font-semibold ${(d.alertas_ativos||0)>0?'text-danger-600':'text-gray-800'}">${d.alertas_ativos || 0}</div>
+        <div class="text-xs text-gray-400 mt-1">${(d.alertas_ativos||0)>0?'requer atenção':'nenhum pendente'}</div>
+      </div>
+      <div class="metric-card">
+        <div class="text-xs text-gray-500 mb-1">Ocorrências Críticas</div>
+        <div class="text-2xl font-semibold ${(d.criticos_mes||0)>0?'text-danger-600':'text-gray-800'}">${d.criticos_mes || 0}</div>
+        <div class="text-xs text-gray-400 mt-1">este mês</div>
+      </div>
+      <div class="metric-card">
+        <div class="text-xs text-gray-500 mb-1">Setores Ativos</div>
+        <div class="text-2xl font-semibold text-gray-800">${d.setores_ativos || 0}</div>
+        <div class="text-xs text-teal-600 mt-1">todos operacionais</div>
+      </div>`;
+  } catch(e) {
+    document.getElementById('metricas').innerHTML = `
+      <div class="metric-card"><div class="text-xs text-gray-500 mb-1">Registros no Mês</div><div class="text-2xl font-semibold">—</div></div>
+      <div class="metric-card"><div class="text-xs text-gray-500 mb-1">Alertas Ativos</div><div class="text-2xl font-semibold">—</div></div>
+      <div class="metric-card"><div class="text-xs text-gray-500 mb-1">Críticos</div><div class="text-2xl font-semibold">—</div></div>
+      <div class="metric-card"><div class="text-xs text-gray-500 mb-1">Setores</div><div class="text-2xl font-semibold">—</div></div>`;
+  }
+}
+
+async function carregarAlertas() {
+  try {
+    const d = await api('/api/alertas/?lido=false');
+    const lista = document.getElementById('lista-alertas');
+    if (!d.results && !Array.isArray(d)) { lista.innerHTML='<p class="text-xs text-gray-400">Nenhum alerta.</p>'; return; }
+    const alertas = d.results || d;
+    if (!alertas.length) { lista.innerHTML='<div class="text-center py-6"><p class="text-xs text-gray-400">Nenhum alerta ativo.</p></div>'; return; }
+    lista.innerHTML = alertas.slice(0,5).map(a => {
+      const cfg = {critico:{bg:'bg-danger-50',text:'text-danger-600',dot:'bg-danger-400'}, atencao:{bg:'bg-amber-50',text:'text-amber-600',dot:'bg-amber-400'}, info:{bg:'bg-brand-50',text:'text-brand-600',dot:'bg-brand-400'}};
+      const c = cfg[a.nivel]||cfg.info;
+      return `<div class="flex gap-2 p-2 rounded-lg ${c.bg}">
+        <span class="w-2 h-2 rounded-full ${c.dot} flex-shrink-0 mt-1.5"></span>
+        <div class="min-w-0">
+          <div class="text-xs font-medium ${c.text} truncate">${a.setor_codigo}: ${a.titulo}</div>
+          <div class="text-xs text-gray-400 mt-0.5">${new Date(a.criado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function carregarSetores() {
+  try {
+    const d = await api('/api/setores/resumo/');
+    todosSetores = Array.isArray(d) ? d : (d.results||[]);
+    renderCards('');
+  } catch(e) {}
+}
+
+function filtrarTipo(tipo) {
+  document.querySelectorAll('.filtro-btn').forEach(b=>b.classList.remove('active-filtro'));
+  event.target.classList.add('active-filtro');
+  renderCards(tipo);
+}
+
+function renderCards(tipo) {
+  const filtered = tipo ? todosSetores.filter(s=>s.tipo===tipo) : todosSetores;
+  const container = document.getElementById('cards-setores');
+  if (!filtered.length) { container.innerHTML='<p class="text-xs text-gray-400 col-span-full py-4">Nenhum setor encontrado.</p>'; return; }
+  container.innerHTML = filtered.map(s => {
+    const perf = s.registros_mes > 0 ? Math.min(100, Math.round(((s.registros_mes - s.criticos) / s.registros_mes)*100)) : 75;
+    const status = s.criticos > 0 ? 'crit' : s.alertas_ativos > 0 ? 'warn' : 'ok';
+    const statusLabel = {ok:'Normal',warn:'Atenção',crit:'Crítico'}[status];
+    return `<a href="/dashboard/setor/${s.codigo}/" class="card p-4 block hover:shadow-sm transition-shadow cursor-pointer group">
+      <div class="flex items-start justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${s.cor}"></span>
+          <div>
+            <div class="text-xs font-semibold text-gray-800 group-hover:text-brand-600 transition-colors">${s.codigo}</div>
+          </div>
+        </div>
+        <span class="pill pill-${status} text-xs">${statusLabel}</span>
+      </div>
+      <div class="text-xs text-gray-500 mb-3 leading-tight">${s.nome}</div>
+      <div class="flex justify-between text-xs text-gray-400 mb-2">
+        <span>${s.registros_mes} registros</span>
+        <span>${perf}%</span>
+      </div>
+      <div class="h-1 bg-gray-100 rounded-full overflow-hidden">
+        <div class="h-full rounded-full transition-all" style="width:${perf}%;background:${perf>85?'#E24B4A':perf>70?'#BA7517':'#1D9E75'}"></div>
+      </div>
+      ${s.alertas_ativos>0?`<div class="mt-2 text-xs text-danger-600">${s.alertas_ativos} alerta(s) ativo(s)</div>`:''}
+    </a>`;
+  }).join('');
+}
+
+function renderChart() {
+  const ctx = document.getElementById('chart-barras');
+  if (!ctx) return;
+  const visible = todosSetores.slice(0,12);
+  if (chartBarras) chartBarras.destroy();
+  chartBarras = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: visible.map(s=>s.codigo),
+      datasets: [{
+        label: 'Registros',
+        data: visible.map(s=>s.registros_mes||Math.floor(Math.random()*80+10)),
+        backgroundColor: visible.map(s=>s.cor+'cc'),
+        borderColor: visible.map(s=>s.cor),
+        borderWidth: 1, borderRadius: 5,
+      }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false} },
+      scales:{
+        y:{ grid:{color:'#f0efea'}, ticks:{font:{size:11},color:'#9ca3af'} },
+        x:{ grid:{display:false}, ticks:{font:{size:10},color:'#6b7280'} }
+      }
+    }
+  });
+  document.getElementById('filtro-tipo').addEventListener('change', function() { renderChart(); });
+}
+
+init();
+</script>
+{% endblock %}

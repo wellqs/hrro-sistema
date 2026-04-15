@@ -1,0 +1,88 @@
+{% extends "base/base.html" %}
+{% block title %}Organograma — SaúdeGestão RO{% endblock %}
+{% block nav_org %}active{% endblock %}
+{% block page_title %}Organograma Institucional{% endblock %}
+
+{% block content %}
+<div class="mb-4 flex items-center gap-3">
+  <input id="busca" type="text" placeholder="Buscar setor..." class="w-48 text-sm" />
+  <div class="flex gap-1 text-xs">
+    <button onclick="filtrarNivel('')" class="nivel-btn active-nivel px-3 py-1.5 rounded-lg border text-gray-600">Todos</button>
+    <button onclick="filtrarNivel(0)" class="nivel-btn px-3 py-1.5 rounded-lg border text-gray-600">Direção</button>
+    <button onclick="filtrarNivel(1)" class="nivel-btn px-3 py-1.5 rounded-lg border text-gray-600">Diretorias</button>
+    <button onclick="filtrarNivel(2)" class="nivel-btn px-3 py-1.5 rounded-lg border text-gray-600">Setores</button>
+    <button onclick="filtrarNivel(3)" class="nivel-btn px-3 py-1.5 rounded-lg border text-gray-600">Unidades</button>
+  </div>
+</div>
+
+<div id="org-root" class="space-y-6"></div>
+
+<style>
+.nivel-btn { transition:all .15s; background:#fff; }
+.nivel-btn.active-nivel { background:#E6F1FB; color:#185FA5; border-color:#B5D4F4; }
+.setor-node { transition:all .15s; }
+.setor-node:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); transform:translateY(-1px); }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let todosSetores = [];
+
+const NIVEL_LABELS = {0:'Direção Máxima',1:'Diretorias e Adjuntos',2:'Gerências, Núcleos e Centrais',3:'Unidades Especializadas'};
+const TIPO_COR = {direcao:'#185FA5',diretoria:'#0F6E56',gerencia:'#534AB7',assistencial:'#993C1D',administrativo:'#5F5E5A',unidade:'#A32D2D',comissao:'#854F0B'};
+
+async function carregarOrganograma() {
+  try {
+    const d = await api('/api/setores/organograma/');
+    todosSetores = Array.isArray(d) ? d : (d.results||[]);
+    renderOrganograma('', '');
+  } catch(e) { document.getElementById('org-root').innerHTML='<p class="text-sm text-gray-400">Erro ao carregar organograma.</p>'; }
+}
+
+function renderOrganograma(busca, nivel) {
+  let setores = todosSetores;
+  if (busca) setores = setores.filter(s=>s.nome.toLowerCase().includes(busca.toLowerCase())||s.codigo.toLowerCase().includes(busca.toLowerCase()));
+  if (nivel !== '') setores = setores.filter(s=>s.nivel===Number(nivel));
+
+  const niveis = nivel !== '' ? [Number(nivel)] : [0,1,2,3];
+  const root = document.getElementById('org-root');
+
+  root.innerHTML = niveis.map(n => {
+    const ns = setores.filter(s=>s.nivel===n);
+    if (!ns.length) return '';
+    return `<div>
+      <div class="flex items-center gap-3 mb-3">
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">${NIVEL_LABELS[n]||'Nível '+n}</h2>
+        <span class="text-xs text-gray-300">${ns.length} setor(es)</span>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        ${ns.map(s=>`
+        <a href="/dashboard/setor/${s.codigo}/"
+           class="setor-node card p-4 block" style="border-left:3px solid ${s.cor||TIPO_COR[s.tipo]||'#888'}">
+          <div class="text-xs font-semibold mb-1" style="color:${s.cor||TIPO_COR[s.tipo]||'#888'}">${s.codigo}</div>
+          <div class="text-xs text-gray-700 leading-tight mb-2">${s.nome}</div>
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-gray-400">${s.tipo}</span>
+            ${s.parent_codigo?`<span class="text-xs text-gray-300">↑ ${s.parent_codigo}</span>`:''}
+          </div>
+          ${s.subordinados_count>0?`<div class="text-xs text-gray-400 mt-1">${s.subordinados_count} subordinado(s)</div>`:''}
+        </a>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filtrarNivel(nivel) {
+  document.querySelectorAll('.nivel-btn').forEach(b=>b.classList.remove('active-nivel'));
+  event.target.classList.add('active-nivel');
+  renderOrganograma(document.getElementById('busca').value, nivel);
+}
+
+document.getElementById('busca').addEventListener('input', function() {
+  renderOrganograma(this.value, '');
+});
+
+carregarOrganograma();
+</script>
+{% endblock %}

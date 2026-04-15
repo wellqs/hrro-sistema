@@ -1,0 +1,150 @@
+{% extends "base/base.html" %}
+{% block title %}Metas de Segurança — NSP{% endblock %}
+{% block nav_nsp_metas %}active{% endblock %}
+{% block page_title %}Metas Internacionais de Segurança do Paciente{% endblock %}
+
+{% block content %}
+<div class="mb-5 flex items-center justify-between">
+  <p class="text-xs text-gray-400 max-w-xl">
+    As 6 Metas Internacionais de Segurança do Paciente da OMS / ANVISA RDC 36/2013.
+    Os números abaixo refletem notificações abertas relacionadas a cada meta.
+  </p>
+  <a href="/setor/nsp/notificacoes/nova/" class="btn-primary text-xs">+ Nova Notificação</a>
+</div>
+
+<div id="cards-metas" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+
+<div class="mt-8 card p-5">
+  <h2 class="text-sm font-semibold text-gray-800 mb-4">Notificações abertas por meta</h2>
+  <div style="position:relative; height:200px;">
+    <canvas id="chart-metas"></canvas>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const METAS = [
+  {
+    id: 'meta_1',
+    numero: '01',
+    titulo: 'Identificar Corretamente o Paciente',
+    descricao: 'Garantir a identificação correta do paciente antes de qualquer procedimento, exame, medicação ou transfusão.',
+    tipos: ['identificacao'],
+    cor: '#185FA5',
+  },
+  {
+    id: 'meta_2',
+    numero: '02',
+    titulo: 'Melhorar a Comunicação entre Profissionais',
+    descricao: 'Assegurar que informações críticas sejam comunicadas de forma correta e oportuna entre equipes.',
+    tipos: ['comunicacao'],
+    cor: '#0F6E56',
+  },
+  {
+    id: 'meta_3',
+    numero: '03',
+    titulo: 'Segurança na Prescrição e Dispensação',
+    descricao: 'Prevenir erros com medicamentos de alta vigilância. Incluir verificação dupla em heparina, insulina e eletrólitos concentrados.',
+    tipos: ['erro_medicacao', 'transfusao'],
+    cor: '#854F0B',
+  },
+  {
+    id: 'meta_4',
+    numero: '04',
+    titulo: 'Cirurgia Segura',
+    descricao: 'Assegurar que cirurgias sejam realizadas no local correto, no procedimento correto e no paciente correto (checklist cirúrgico).',
+    tipos: ['cirurgia'],
+    cor: '#534AB7',
+  },
+  {
+    id: 'meta_5',
+    numero: '05',
+    titulo: 'Higiene das Mãos e Prevenção de Infecções',
+    descricao: 'Reduzir o risco de infecções relacionadas à assistência à saúde com a prática correta da higiene das mãos.',
+    tipos: ['infeccao'],
+    cor: '#993C1D',
+  },
+  {
+    id: 'meta_6',
+    numero: '06',
+    titulo: 'Prevenção de Quedas e Lesões por Pressão',
+    descricao: 'Reduzir o risco de danos ao paciente resultantes de quedas e lesões por pressão com protocolos de avaliação de risco.',
+    tipos: ['queda', 'lpp'],
+    cor: '#A32D2D',
+  },
+];
+
+let chartMetas = null;
+
+async function init() {
+  try {
+    const d = await api('/api/setor/nsp/dashboard/');
+    const mapa = Object.fromEntries((d.por_meta||[]).map(m=>[m.meta_relacionada, m.total]));
+    renderCards(mapa);
+    renderChart(mapa);
+  } catch(e) { console.error(e); }
+}
+
+function renderCards(mapa) {
+  const el = document.getElementById('cards-metas');
+  el.innerHTML = METAS.map(m => {
+    const total = mapa[m.id] || 0;
+    const statusCor = total > 3 ? '#A32D2D' : total > 0 ? '#BA7517' : '#0F6E56';
+    const statusBg  = total > 3 ? '#FCEBEB' : total > 0 ? '#FAEEDA' : '#E1F5EE';
+    const statusTxt = total > 3 ? 'Crítico' : total > 0 ? 'Atenção' : 'Adequado';
+    return `
+    <div class="card p-5" style="border-top: 3px solid ${m.cor}">
+      <div class="flex items-start justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+               style="background:${m.cor}">${m.numero}</div>
+          <div>
+            <div class="text-xs font-semibold text-gray-800 leading-tight">${m.titulo}</div>
+          </div>
+        </div>
+        <div class="flex-shrink-0 ml-2 text-center">
+          <div class="text-xl font-bold" style="color:${statusCor}">${total}</div>
+          <div class="text-xs" style="color:${statusCor}">abertas</div>
+        </div>
+      </div>
+      <p class="text-xs text-gray-500 leading-relaxed mb-3">${m.descricao}</p>
+      <div class="flex items-center justify-between">
+        <span class="pill text-xs" style="background:${statusBg};color:${statusCor}">${statusTxt}</span>
+        <a href="/setor/nsp/notificacoes/?tipo=${m.tipos[0]}" class="text-xs text-brand-600 hover:underline">Ver notificações</a>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderChart(mapa) {
+  const ctx = document.getElementById('chart-metas');
+  if (!ctx) return;
+  if (chartMetas) chartMetas.destroy();
+  chartMetas = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: METAS.map(m => 'Meta ' + m.numero),
+      datasets: [{
+        label: 'Notificações abertas',
+        data: METAS.map(m => mapa[m.id] || 0),
+        backgroundColor: METAS.map(m => m.cor + 'cc'),
+        borderColor: METAS.map(m => m.cor),
+        borderWidth: 1,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { grid:{color:'#f0efea'}, ticks:{font:{size:11},color:'#9ca3af'}, beginAtZero: true },
+        x: { grid:{display:false}, ticks:{font:{size:11},color:'#6b7280'} }
+      }
+    }
+  });
+}
+
+init();
+</script>
+{% endblock %}

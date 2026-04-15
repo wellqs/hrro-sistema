@@ -1,0 +1,157 @@
+{% extends "base/base.html" %}
+{% block title %}Solicitacao #{{ solicitacao.id }} - NIR{% endblock %}
+{% block page_title %}Solicitacao de Regulacao #{{ solicitacao.id }}{% endblock %}
+
+{% block content %}
+{% include "nir/_setor_header.html" with nir_action_url="/setor/nir/solicitacoes/nova/" nir_action_label="+ Nova Solicitacao" %}
+
+<div class="max-w-3xl space-y-5">
+  <div class="card p-5">
+    <div class="flex items-start justify-between gap-4">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-1 flex-wrap">
+          <span id="badge-prioridade" class="pill pill-prioridade"></span>
+          <span id="badge-status" class="pill pill-status"></span>
+          <span class="text-xs text-gray-400">{{ solicitacao.get_tipo_display }}</span>
+        </div>
+        <h2 class="text-base font-semibold text-gray-800">{{ solicitacao.paciente_nome }}</h2>
+        <p class="text-xs text-gray-500 mt-0.5">
+          Setor: <strong>{{ solicitacao.setor.codigo }}</strong>
+          {% if solicitacao.paciente_prontuario %} · Prontuario: <strong>{{ solicitacao.paciente_prontuario }}</strong>{% endif %}
+          {% if solicitacao.cid_principal %} · CID: <strong>{{ solicitacao.cid_principal }}</strong>{% endif %}
+        </p>
+      </div>
+      <div class="text-right flex-shrink-0">
+        <div class="text-xs text-gray-400">Solicitado em</div>
+        <div class="text-sm font-semibold text-gray-700">{{ solicitacao.data_solicitacao }}</div>
+        <div class="text-xs text-gray-400 mt-1">por {{ solicitacao.solicitado_por }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-5 space-y-4">
+    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Informacoes Clinicas</h3>
+    <div>
+      <div class="text-xs text-gray-400 mb-1">Resumo Clinico</div>
+      <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ solicitacao.descricao_clinica }}</p>
+    </div>
+    <div>
+      <div class="text-xs text-gray-400 mb-1">Justificativa</div>
+      <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ solicitacao.justificativa }}</p>
+    </div>
+    {% if solicitacao.destino_solicitado %}
+    <div>
+      <div class="text-xs text-gray-400 mb-1">Destino / Servico Solicitado</div>
+      <p class="text-sm text-gray-700">{{ solicitacao.destino_solicitado }}</p>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if solicitacao.regulado_por or solicitacao.observacoes %}
+  <div class="card p-5 space-y-3">
+    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Regulacao</h3>
+    {% if solicitacao.regulado_por %}
+    <p class="text-xs text-gray-500">
+      Regulado por <strong>{{ solicitacao.regulado_por }}</strong>
+      {% if solicitacao.data_regulacao %}em {{ solicitacao.data_regulacao }}{% endif %}
+    </p>
+    {% endif %}
+    {% if solicitacao.observacoes %}
+    <div>
+      <div class="text-xs text-gray-400 mb-1">Observacoes</div>
+      <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ solicitacao.observacoes }}</p>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if solicitacao.status in 'solicitado em_regulacao' %}
+  <div class="card p-5">
+    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Atualizar Regulacao</h3>
+    <div class="space-y-3">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Novo Status</label>
+        <select id="novo-status" class="max-w-xs">
+          {% for valor, label in status_choices %}
+          {% if valor not in 'solicitado' %}
+          <option value="{{ valor }}" {% if solicitacao.status == valor %}selected{% endif %}>{{ label }}</option>
+          {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Observacoes</label>
+        <textarea id="observacoes-reg" rows="3" placeholder="Adicionar observacoes...">{{ solicitacao.observacoes }}</textarea>
+      </div>
+      <div id="reg-erro" class="hidden text-xs text-danger-600 bg-danger-50 rounded-lg px-3 py-2"></div>
+      <button onclick="salvarRegulacao()" class="btn-primary text-sm">Salvar</button>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="flex gap-3">
+    <a href="/setor/nir/solicitacoes/" class="btn-secondary text-sm">← Voltar a lista</a>
+  </div>
+</div>
+
+<style>
+.tab-btn.active-tab { color:#185FA5; border-bottom-color:#185FA5; }
+.pill-prioridade.eletivo    { background:#E6F1FB; color:#185FA5; }
+.pill-prioridade.urgencia   { background:#FAEEDA; color:#854F0B; }
+.pill-prioridade.emergencia { background:#FCEBEB; color:#A32D2D; }
+.pill-status.solicitado    { background:#FCEBEB; color:#A32D2D; }
+.pill-status.em_regulacao  { background:#FAEEDA; color:#854F0B; }
+.pill-status.autorizado    { background:#E1F5EE; color:#0F6E56; }
+.pill-status.negado        { background:#f5f4f0; color:#6b7280; }
+.pill-status.cancelado     { background:#f5f4f0; color:#9ca3af; }
+.pill-status.concluido     { background:#EEEDFE; color:#534AB7; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const PRIO_LABEL   = { eletivo:'Eletivo', urgencia:'Urgencia', emergencia:'Emergencia' };
+const STATUS_LABEL = {
+  solicitado:'Solicitado', em_regulacao:'Em Regulacao', autorizado:'Autorizado',
+  negado:'Negado', cancelado:'Cancelado', concluido:'Concluido',
+};
+
+const prioridade = '{{ solicitacao.prioridade }}';
+const status     = '{{ solicitacao.status }}';
+
+const badgePrio   = document.getElementById('badge-prioridade');
+const badgeStatus = document.getElementById('badge-status');
+
+if (badgePrio) {
+  badgePrio.textContent = PRIO_LABEL[prioridade] || prioridade;
+  badgePrio.classList.add(prioridade);
+}
+if (badgeStatus) {
+  badgeStatus.textContent = STATUS_LABEL[status] || status;
+  badgeStatus.classList.add(status);
+}
+
+async function salvarRegulacao() {
+  const novoStatus = document.getElementById('novo-status').value;
+  const obs        = document.getElementById('observacoes-reg').value.trim();
+  const erro       = document.getElementById('reg-erro');
+  erro.classList.add('hidden');
+
+  try {
+    const r = await api('/api/setor/nir/solicitacoes/{{ solicitacao.id }}/regular/', {
+      method: 'POST',
+      body: JSON.stringify({ status: novoStatus, observacoes: obs })
+    });
+    if (r.id) {
+      window.location.reload();
+    } else {
+      erro.textContent = Object.values(r).flat().join(' | ') || 'Erro ao salvar.';
+      erro.classList.remove('hidden');
+    }
+  } catch(e) {
+    erro.textContent = 'Erro de comunicacao.';
+    erro.classList.remove('hidden');
+  }
+}
+</script>
+{% endblock %}

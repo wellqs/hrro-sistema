@@ -1,0 +1,130 @@
+{% extends "base/base.html" %}
+{% block title %}Solicitacoes NIR{% endblock %}
+{% block page_title %}Solicitacoes de Regulacao{% endblock %}
+
+{% block content %}
+{% include "nir/_setor_header.html" with nir_action_url="/setor/nir/solicitacoes/nova/" nir_action_label="+ Nova Solicitacao" %}
+
+<div class="flex items-center justify-between mb-5">
+  <div class="flex gap-2 flex-wrap">
+    <select id="filtro-tipo" class="text-xs rounded-lg px-2 py-1.5" style="width:auto">
+      <option value="">Todos os tipos</option>
+      {% for valor, label in tipos %}
+      <option value="{{ valor }}">{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select id="filtro-prioridade" class="text-xs rounded-lg px-2 py-1.5" style="width:auto">
+      <option value="">Todas as prioridades</option>
+      {% for valor, label in prioridades %}
+      <option value="{{ valor }}">{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select id="filtro-status" class="text-xs rounded-lg px-2 py-1.5" style="width:auto">
+      <option value="">Todos os status</option>
+      {% for valor, label in status_choices %}
+      <option value="{{ valor }}">{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <a href="/setor/nir/solicitacoes/nova/" class="btn-primary text-xs">+ Nova Solicitacao</a>
+</div>
+
+<div id="contadores" class="flex gap-3 mb-5"></div>
+
+<div class="card">
+  <div id="tabela-solicitacoes" class="min-h-32"></div>
+</div>
+
+<style>
+.tab-btn.active-tab { color:#185FA5; border-bottom-color:#185FA5; }
+.prioridade-eletivo    { background:#E6F1FB; color:#185FA5; }
+.prioridade-urgencia   { background:#FAEEDA; color:#854F0B; }
+.prioridade-emergencia { background:#FCEBEB; color:#A32D2D; }
+.status-solicitado    { background:#FCEBEB; color:#A32D2D; }
+.status-em_regulacao  { background:#FAEEDA; color:#854F0B; }
+.status-autorizado    { background:#E1F5EE; color:#0F6E56; }
+.status-negado        { background:#f5f4f0; color:#6b7280; }
+.status-cancelado     { background:#f5f4f0; color:#9ca3af; }
+.status-concluido     { background:#EEEDFE; color:#534AB7; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const TIPO_LABEL = {
+  transferencia:'Transferencia', leito_uti:'Vaga UTI', leito_enferma:'Vaga Enfermaria',
+  procedimento:'Procedimento Externo', exame:'Exame Externo', cirurgia:'Cirurgia',
+  ambulatorio:'Consulta Ambulatorial', outro:'Outro',
+};
+const PRIO_LABEL   = { eletivo:'Eletivo', urgencia:'Urgencia', emergencia:'Emergencia' };
+const STATUS_LABEL = {
+  solicitado:'Solicitado', em_regulacao:'Em Regulacao', autorizado:'Autorizado',
+  negado:'Negado', cancelado:'Cancelado', concluido:'Concluido',
+};
+
+async function carregar() {
+  const tipo       = document.getElementById('filtro-tipo').value;
+  const prioridade = document.getElementById('filtro-prioridade').value;
+  const status     = document.getElementById('filtro-status').value;
+  let url = '/api/setor/nir/solicitacoes/?';
+  if (tipo)       url += 'tipo=' + tipo + '&';
+  if (prioridade) url += 'prioridade=' + prioridade + '&';
+  if (status)     url += 'status=' + status + '&';
+
+  try {
+    const d = await api(url);
+    const lista = d.results || d;
+
+    const aguardando   = lista.filter(s => s.status === 'solicitado').length;
+    const emRegulacao  = lista.filter(s => s.status === 'em_regulacao').length;
+    const emergencias  = lista.filter(s => s.prioridade === 'emergencia' && ['solicitado','em_regulacao'].includes(s.status)).length;
+
+    document.getElementById('contadores').innerHTML = `
+      <div class="metric-card flex gap-5 px-4">
+        <div class="text-center"><div class="text-lg font-semibold text-gray-800">${lista.length}</div><div class="text-xs text-gray-400">Total</div></div>
+        <div class="text-center"><div class="text-lg font-semibold text-danger-600">${aguardando}</div><div class="text-xs text-gray-400">Aguardando</div></div>
+        <div class="text-center"><div class="text-lg font-semibold text-amber-600">${emRegulacao}</div><div class="text-xs text-gray-400">Em Regulacao</div></div>
+        <div class="text-center"><div class="text-lg font-semibold text-danger-600">${emergencias}</div><div class="text-xs text-gray-400">Emergencias</div></div>
+      </div>`;
+
+    const el = document.getElementById('tabela-solicitacoes');
+    if (!lista.length) {
+      el.innerHTML = '<div class="p-8 text-center"><p class="text-sm text-gray-400">Nenhuma solicitacao encontrada.</p></div>';
+      return;
+    }
+    el.innerHTML = `<table class="w-full text-xs">
+      <thead><tr class="border-b border-gray-100 bg-gray-50">
+        <th class="text-left px-4 py-3 text-gray-400 font-medium">Data</th>
+        <th class="text-left px-4 py-3 text-gray-400 font-medium">Paciente</th>
+        <th class="text-left px-4 py-3 text-gray-400 font-medium">Setor</th>
+        <th class="text-left px-4 py-3 text-gray-400 font-medium">Tipo</th>
+        <th class="text-left px-4 py-3 text-gray-400 font-medium">Prioridade</th>
+        <th class="text-left px-4 py-3 text-gray-400 font-medium">Status</th>
+        <th class="text-left px-4 py-3 text-gray-400 font-medium">Solicitado por</th>
+        <th class="px-4 py-3"></th>
+      </tr></thead>
+      <tbody>
+        ${lista.map(s => `
+        <tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+          <td class="px-4 py-3 text-gray-600">${s.data_solicitacao}</td>
+          <td class="px-4 py-3 font-semibold text-gray-800">${s.paciente_nome}</td>
+          <td class="px-4 py-3 text-gray-600">${s.setor_codigo}</td>
+          <td class="px-4 py-3 text-gray-700">${TIPO_LABEL[s.tipo] || s.tipo}</td>
+          <td class="px-4 py-3"><span class="pill prioridade-${s.prioridade}">${PRIO_LABEL[s.prioridade] || s.prioridade}</span></td>
+          <td class="px-4 py-3"><span class="pill status-${s.status}">${STATUS_LABEL[s.status] || s.status}</span></td>
+          <td class="px-4 py-3 text-gray-400">${s.solicitado_por_nome}</td>
+          <td class="px-4 py-3">
+            <a href="/setor/nir/solicitacoes/${s.id}/" class="text-brand-600 hover:underline text-xs">Ver detalhes</a>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  } catch(e) { console.error(e); }
+}
+
+['filtro-tipo','filtro-prioridade','filtro-status'].forEach(id =>
+  document.getElementById(id).addEventListener('change', carregar)
+);
+carregar();
+</script>
+{% endblock %}

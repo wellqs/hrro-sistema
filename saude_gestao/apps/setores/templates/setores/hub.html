@@ -1,0 +1,24 @@
+{% extends "base/base.html" %}
+{% block title %}Setores — Apps{% endblock %}
+{% block page_title %}Setores{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl space-y-3">
+  {% for app in apps %}
+  <a href="{{ app.url }}" class="card p-5 flex items-center gap-4 hover:bg-gray-50 transition-colors block">
+    <div class="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center flex-shrink-0">
+      <span class="text-sm font-semibold text-brand-600 font-mono">{{ app.codigo }}</span>
+    </div>
+    <div>
+      <div class="text-sm font-semibold text-gray-800">{{ app.codigo }}</div>
+      <div class="text-xs text-gray-400 mt-0.5">{{ app.url }}</div>
+    </div>
+    <svg class="w-4 h-4 text-gray-300 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+  </a>
+  {% empty %}
+  <p class="text-sm text-gray-400">Nenhum app de setor cadastrado.</p>
+  {% endfor %}
+</div>
+{% endblock %}

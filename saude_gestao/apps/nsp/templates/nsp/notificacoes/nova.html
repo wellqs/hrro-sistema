@@ -1,0 +1,222 @@
+{% extends "base/base.html" %}
+{% block title %}Nova Notificação NSP{% endblock %}
+{% block nav_nsp_nova %}active{% endblock %}
+{% block page_title %}Notificação de Incidente — NSP{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+
+  <div class="card p-6 mb-5">
+    <div class="flex items-center gap-3 mb-5">
+      <div class="w-9 h-9 rounded-lg bg-coral-50 flex items-center justify-center flex-shrink-0">
+        <svg class="w-5 h-5 text-coral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        </svg>
+      </div>
+      <div>
+        <h2 class="text-sm font-semibold text-gray-800">Nova Notificação de Incidente</h2>
+        <p class="text-xs text-gray-400 mt-0.5">Todas as notificações são confidenciais e destinadas à melhoria contínua</p>
+      </div>
+    </div>
+
+    <div id="msg-sucesso" class="hidden mb-4 p-3 bg-teal-50 text-teal-600 rounded-lg text-sm border border-teal-100 flex items-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+      </svg>
+      Notificação registrada com sucesso!
+    </div>
+    <div id="msg-erro" class="hidden mb-4 p-3 bg-danger-50 text-danger-600 rounded-lg text-sm border border-danger-100"></div>
+
+    <form id="form-notificacao" class="space-y-4">
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Setor *</label>
+          <select id="sel-setor" required class="w-full">
+            <option value="">Selecione o setor...</option>
+            {% for s in setores %}
+            <option value="{{ s.id }}" {% if user.setor and user.setor.id == s.id %}selected{% endif %}>
+              {{ s.codigo }} — {{ s.nome }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Tipo de Incidente *</label>
+          <select id="sel-tipo" required class="w-full">
+            <option value="">Selecione o tipo...</option>
+            {% for valor, label in tipos %}
+            <option value="{{ valor }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- Meta relacionada (preenchida automaticamente) -->
+      <div id="meta-box" class="hidden p-3 rounded-lg bg-brand-50 border border-brand-100 text-xs text-brand-700">
+        <span class="font-semibold">Meta de segurança relacionada:</span>
+        <span id="meta-texto"></span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Data de Ocorrência *</label>
+          <input type="date" id="inp-data" required class="w-full" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Hora (opcional)</label>
+          <input type="time" id="inp-hora" class="w-full" />
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Descrição do Incidente *</label>
+        <textarea id="inp-descricao" rows="4" required
+          placeholder="Descreva o que ocorreu, onde, como e quaisquer fatores contribuintes..."
+          class="w-full resize-none"></textarea>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Nível de Dano ao Paciente *</label>
+        <div class="grid grid-cols-5 gap-2" id="dano-selector">
+          {% for valor, label in danos %}
+          <label class="dano-option cursor-pointer text-center p-2 rounded-lg border border-gray-200 hover:border-brand-400 transition-colors">
+            <input type="radio" name="dano" value="{{ valor }}" class="sr-only" {% if valor == 'nenhum' %}checked{% endif %}>
+            <div class="text-xs font-medium text-gray-700">{{ label }}</div>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button type="submit" class="btn-primary">Registrar Notificação</button>
+        <a href="/setor/nsp/" class="btn-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Últimas notificações -->
+  <div class="card p-5">
+    <h3 class="text-sm font-semibold text-gray-800 mb-3">Minhas últimas notificações</h3>
+    <div id="ultimas-notificacoes">
+      <p class="text-xs text-gray-400">Carregando...</p>
+    </div>
+  </div>
+
+</div>
+
+<style>
+.dano-option input:checked ~ div { font-weight: 600; }
+.dano-option:has(input[value="nenhum"]:checked)   { background:#E1F5EE; border-color:#1D9E75; color:#0F6E56; }
+.dano-option:has(input[value="leve"]:checked)     { background:#E6F1FB; border-color:#185FA5; color:#185FA5; }
+.dano-option:has(input[value="moderado"]:checked) { background:#FAEEDA; border-color:#BA7517; color:#854F0B; }
+.dano-option:has(input[value="grave"]:checked)    { background:#FCEBEB; border-color:#E24B4A; color:#A32D2D; }
+.dano-option:has(input[value="obito"]:checked)    { background:#2d1b1b; border-color:#2d1b1b; color:#fff; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const META_MAP = {
+  queda:'Meta 6 — Prevenção de quedas e lesões',
+  lpp:'Meta 6 — Prevenção de quedas e lesões',
+  erro_medicacao:'Meta 3 — Segurança de medicamentos de alta vigilância',
+  identificacao:'Meta 1 — Identificação correta do paciente',
+  cirurgia:'Meta 4 — Cirurgia segura (local correto)',
+  transfusao:'Meta 3 — Segurança de medicamentos de alta vigilância',
+  infeccao:'Meta 5 — Higiene das mãos / prevenção de infecções',
+  comunicacao:'Meta 2 — Comunicação efetiva entre profissionais',
+};
+
+// Preenche data de hoje
+document.getElementById('inp-data').value = new Date().toISOString().split('T')[0];
+
+// Ao trocar tipo, mostra meta relacionada
+document.getElementById('sel-tipo').addEventListener('change', function() {
+  const meta = META_MAP[this.value];
+  const box = document.getElementById('meta-box');
+  const txt = document.getElementById('meta-texto');
+  if (meta) {
+    txt.textContent = ' ' + meta;
+    box.classList.remove('hidden');
+  } else {
+    box.classList.add('hidden');
+  }
+});
+
+// Submit
+document.getElementById('form-notificacao').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = this.querySelector('[type=submit]');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+
+  const danoSel = document.querySelector('input[name="dano"]:checked');
+  const payload = {
+    setor: document.getElementById('sel-setor').value,
+    tipo: document.getElementById('sel-tipo').value,
+    data_ocorrencia: document.getElementById('inp-data').value,
+    hora_ocorrencia: document.getElementById('inp-hora').value || null,
+    descricao: document.getElementById('inp-descricao').value,
+    dano: danoSel ? danoSel.value : 'nenhum',
+  };
+
+  try {
+    const r = await fetch('/api/setor/nsp/notificacoes/', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': window.csrfToken},
+      body: JSON.stringify(payload),
+      credentials: 'include',
+    });
+    const d = await r.json();
+    if (r.ok) {
+      document.getElementById('msg-sucesso').classList.remove('hidden');
+      document.getElementById('msg-erro').classList.add('hidden');
+      this.reset();
+      document.getElementById('inp-data').value = new Date().toISOString().split('T')[0];
+      document.getElementById('meta-box').classList.add('hidden');
+      carregarUltimas();
+      setTimeout(()=>document.getElementById('msg-sucesso').classList.add('hidden'), 4000);
+    } else {
+      const erros = Object.entries(d).map(([k,v])=>`${k}: ${v}`).join('; ');
+      document.getElementById('msg-erro').textContent = 'Erro: ' + erros;
+      document.getElementById('msg-erro').classList.remove('hidden');
+    }
+  } catch(err) {
+    document.getElementById('msg-erro').textContent = 'Erro de conexão. Tente novamente.';
+    document.getElementById('msg-erro').classList.remove('hidden');
+  }
+  btn.disabled = false; btn.textContent = 'Registrar Notificação';
+});
+
+async function carregarUltimas() {
+  try {
+    const d = await api('/api/setor/nsp/notificacoes/');
+    const notifs = (d.results || d).slice(0, 5);
+    const el = document.getElementById('ultimas-notificacoes');
+    if (!notifs.length) {
+      el.innerHTML = '<p class="text-xs text-gray-400">Nenhuma notificação registrada ainda.</p>';
+      return;
+    }
+    el.innerHTML = `<table class="w-full text-xs">
+      <thead><tr class="border-b border-gray-100">
+        <th class="text-left py-2 text-gray-400 font-medium">Data</th>
+        <th class="text-left py-2 text-gray-400 font-medium">Tipo</th>
+        <th class="text-left py-2 text-gray-400 font-medium">Dano</th>
+        <th class="text-left py-2 text-gray-400 font-medium">Status</th>
+      </tr></thead>
+      <tbody>
+        ${notifs.map(n=>`<tr class="border-b border-gray-50">
+          <td class="py-2 text-gray-500">${n.data_ocorrencia}</td>
+          <td class="py-2 text-gray-700">${n.tipo_display}</td>
+          <td class="py-2 text-gray-600">${n.dano_display}</td>
+          <td class="py-2 text-gray-500">${n.status_display}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  } catch(e) {}
+}
+
+carregarUltimas();
+</script>
+{% endblock %}

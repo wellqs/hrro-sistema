@@ -1,0 +1,126 @@
+{% extends "base/base.html" %}
+{% block title %}Notificações NSP{% endblock %}
+{% block nav_nsp_lista %}active{% endblock %}
+{% block page_title %}Notificações de Incidentes{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+  <div class="flex gap-2 flex-wrap">
+    <select id="filtro-tipo" class="text-xs rounded-lg px-2 py-1.5" style="width:auto">
+      <option value="">Todos os tipos</option>
+      {% for valor, label in tipos %}
+      <option value="{{ valor }}">{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select id="filtro-dano" class="text-xs rounded-lg px-2 py-1.5" style="width:auto">
+      <option value="">Todos os danos</option>
+      {% for valor, label in danos %}
+      <option value="{{ valor }}">{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select id="filtro-status" class="text-xs rounded-lg px-2 py-1.5" style="width:auto">
+      <option value="">Todos os status</option>
+      {% for valor, label in status_choices %}
+      <option value="{{ valor }}">{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <a href="/setor/nsp/notificacoes/nova/" class="btn-primary text-xs">+ Nova Notificação</a>
+</div>
+
+<!-- Contadores -->
+<div id="contadores" class="flex gap-3 mb-5"></div>
+
+<!-- Tabela -->
+<div class="card">
+  <div id="tabela-notificacoes" class="min-h-32"></div>
+</div>
+
+<style>
+.dano-nenhum  { background:#E1F5EE; color:#0F6E56; }
+.dano-leve    { background:#E6F1FB; color:#185FA5; }
+.dano-moderado{ background:#FAEEDA; color:#854F0B; }
+.dano-grave   { background:#FCEBEB; color:#A32D2D; }
+.dano-obito   { background:#2d1b1b; color:#fff; }
+.status-aberta     { background:#FCEBEB; color:#A32D2D; }
+.status-em_analise { background:#FAEEDA; color:#854F0B; }
+.status-concluida  { background:#E1F5EE; color:#0F6E56; }
+.status-arquivada  { background:#f5f4f0; color:#9ca3af; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const TIPO_LABEL = {
+  queda:'Queda de Paciente', lpp:'Lesão por Pressão',
+  erro_medicacao:'Erro de Medicação', identificacao:'Falha na Identificação',
+  cirurgia:'Cirurgia em Local Errado', transfusao:'Reação Transfusional',
+  infeccao:'Infecção Associada', comunicacao:'Falha de Comunicação', outro:'Outro'
+};
+const DANO_LABEL   = {nenhum:'Sem Dano',leve:'Leve',moderado:'Moderado',grave:'Grave',obito:'Óbito'};
+const STATUS_LABEL = {aberta:'Aberta',em_analise:'Em Análise',concluida:'Concluída',arquivada:'Arquivada'};
+
+async function carregar() {
+  const tipo   = document.getElementById('filtro-tipo').value;
+  const dano   = document.getElementById('filtro-dano').value;
+  const status = document.getElementById('filtro-status').value;
+  let url = '/api/setor/nsp/notificacoes/?';
+  if (tipo)   url += 'tipo='   + tipo   + '&';
+  if (dano)   url += 'dano='   + dano   + '&';
+  if (status) url += 'status=' + status + '&';
+
+  try {
+    const d = await api(url);
+    const lista = d.results || d;
+
+    // Contadores rápidos
+    const aberta     = lista.filter(n=>n.status==='aberta').length;
+    const em_analise = lista.filter(n=>n.status==='em_analise').length;
+    const graves     = lista.filter(n=>['grave','obito'].includes(n.dano)).length;
+    document.getElementById('contadores').innerHTML = `
+      <div class="metric-card flex gap-5 px-4">
+        <div class="text-center"><div class="text-lg font-semibold text-gray-800">${lista.length}</div><div class="text-xs text-gray-400">Total</div></div>
+        <div class="text-center"><div class="text-lg font-semibold text-danger-600">${aberta}</div><div class="text-xs text-gray-400">Abertas</div></div>
+        <div class="text-center"><div class="text-lg font-semibold text-amber-600">${em_analise}</div><div class="text-xs text-gray-400">Em Análise</div></div>
+        <div class="text-center"><div class="text-lg font-semibold text-danger-600">${graves}</div><div class="text-xs text-gray-400">Graves/Óbitos</div></div>
+      </div>`;
+
+    const el = document.getElementById('tabela-notificacoes');
+    if (!lista.length) {
+      el.innerHTML = '<div class="p-8 text-center"><p class="text-sm text-gray-400">Nenhuma notificação encontrada.</p></div>';
+      return;
+    }
+    el.innerHTML = `<table class="w-full text-xs">
+      <thead><tr class="border-b border-gray-100 bg-gray-50">
+        <th class="text-left px-4 py-3 text-gray-400 font-medium">Data</th>
+        <th class="text-left px-4 py-3 text-gray-400 font-medium">Setor</th>
+        <th class="text-left px-4 py-3 text-gray-400 font-medium">Tipo</th>
+        <th class="text-left px-4 py-3 text-gray-400 font-medium">Dano</th>
+        <th class="text-left px-4 py-3 text-gray-400 font-medium">Status</th>
+        <th class="text-left px-4 py-3 text-gray-400 font-medium">Notificado por</th>
+        <th class="px-4 py-3"></th>
+      </tr></thead>
+      <tbody>
+        ${lista.map(n=>`
+        <tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+          <td class="px-4 py-3 text-gray-600">${n.data_ocorrencia}</td>
+          <td class="px-4 py-3 font-semibold text-gray-800">${n.setor_codigo}</td>
+          <td class="px-4 py-3 text-gray-700">${TIPO_LABEL[n.tipo]||n.tipo}</td>
+          <td class="px-4 py-3"><span class="pill dano-${n.dano}">${DANO_LABEL[n.dano]||n.dano}</span></td>
+          <td class="px-4 py-3"><span class="pill status-${n.status}">${STATUS_LABEL[n.status]||n.status}</span></td>
+          <td class="px-4 py-3 text-gray-400">${n.notificado_por_nome}</td>
+          <td class="px-4 py-3">
+            <a href="/setor/nsp/notificacoes/${n.id}/" class="text-brand-600 hover:underline text-xs">Ver detalhes</a>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  } catch(e) { console.error(e); }
+}
+
+['filtro-tipo','filtro-dano','filtro-status'].forEach(id =>
+  document.getElementById(id).addEventListener('change', carregar)
+);
+carregar();
+</script>
+{% endblock %}

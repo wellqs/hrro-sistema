@@ -1,0 +1,43 @@
+<div class="mb-4 flex items-center gap-2 text-xs text-gray-400">
+  <a href="/dashboard/" class="hover:text-brand-600">Dashboard</a>
+  <span>›</span>
+  <span class="text-gray-600">{{ nir_setor.codigo }}</span>
+</div>
+
+<div class="card p-5 mb-5 flex items-center justify-between gap-4">
+  <div class="flex items-center gap-4">
+    <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white font-semibold text-lg flex-shrink-0"
+         style="background:{{ nir_setor.cor }}">
+      {{ nir_setor.codigo|slice:":2" }}
+    </div>
+    <div>
+      <h1 class="text-base font-semibold text-gray-900">{{ nir_setor.nome }}</h1>
+      <div class="flex items-center gap-3 mt-1 text-xs text-gray-400 flex-wrap">
+        <span>{{ nir_setor.get_tipo_display }}</span>
+        <span>·</span>
+        <span>Nível {{ nir_setor.nivel }}</span>
+        {% if nir_setor.parent %}<span>·</span><span>↑ {{ nir_setor.parent.codigo }}</span>{% endif %}
+      </div>
+    </div>
+  </div>
+  {% if nir_action_url and nir_action_label %}
+  <a href="{{ nir_action_url }}" class="btn-primary text-sm">
+    {{ nir_action_label }}
+  </a>
+  {% endif %}
+</div>
+
+<div class="border-b border-gray-100 mb-5 flex gap-0">
+  <a href="/setor/nir/"
+     class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-transparent -mb-px transition-colors {% if nir_active_tab == 'dashboard' %}active-tab{% else %}text-gray-500 hover:text-gray-700{% endif %}">
+    Visão Geral
+  </a>
+  <a href="/setor/nir/painel/"
+     class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-transparent -mb-px transition-colors {% if nir_active_tab == 'painel' %}active-tab{% else %}text-gray-500 hover:text-gray-700{% endif %}">
+    Painel de Leitos
+  </a>
+  <a href="/setor/nir/solicitacoes/"
+     class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-transparent -mb-px transition-colors {% if nir_active_tab == 'solicitacoes' %}active-tab{% else %}text-gray-500 hover:text-gray-700{% endif %}">
+    Solicitações
+  </a>
+</div>

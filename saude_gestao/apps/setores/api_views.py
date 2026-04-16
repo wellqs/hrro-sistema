@@ -9,6 +9,7 @@ from .serializers import SetorSerializer, SetorDetalheSerializer
 class SetorListView(generics.ListAPIView):
     serializer_class = SetorSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
         user = self.request.user

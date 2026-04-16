@@ -84,7 +84,31 @@
 
       {% if user.pode_ver_tudo %}
       <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 pt-4 pb-1">Setores</p>
-      <div id="sidebar-setores"></div>
+      {% for grupo in sidebar_grupos %}
+      <div class="mb-0.5">
+        <button onclick="toggleAcc('acc-{{ grupo.tipo }}')"
+          class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+          <span class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:{{ grupo.cor }}"></span>
+            {{ grupo.label }}
+          </span>
+          <svg id="acc-{{ grupo.tipo }}-chevron" class="w-3 h-3 text-gray-400 transition-transform"
+            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+        <div id="acc-{{ grupo.tipo }}" class="hidden pl-3">
+          {% for setor in grupo.setores %}
+          <a href="{{ setor.url }}"
+            class="sidebar-item flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-gray-600">
+            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:{{ setor.cor }}"></span>
+            <span class="font-mono font-medium">{{ setor.codigo }}</span>
+            <span class="text-gray-400 truncate">{{ setor.nome }}</span>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
       {% else %}
       <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 pt-4 pb-1">Meu Setor</p>
       {% if user.setor %}
@@ -156,79 +180,7 @@
   }
   tick(); setInterval(tick, 1000);
 
-  // Sidebar accordion de setores
-  const GRUPOS = [
-    { tipo: 'direcao',       label: 'Direção',        cor: '#185FA5' },
-    { tipo: 'diretoria',     label: 'Diretorias',     cor: '#0F6E56' },
-    { tipo: 'gerencia',      label: 'Gerências',      cor: '#534AB7' },
-    { tipo: 'assistencial',  label: 'Assistenciais',  cor: '#993C1D' },
-    { tipo: 'administrativo',label: 'Administrativos',cor: '#5F5E5A' },
-    { tipo: 'unidade',       label: 'Unidades',       cor: '#A32D2D' },
-    { tipo: 'comissao',      label: 'Comissões',      cor: '#854F0B' },
-    { tipo: 'nucleo',        label: 'Núcleos',        cor: '#1A6B7A' },
-  ];
-
-  async function carregarSidebarSetores() {
-    const container = document.getElementById('sidebar-setores');
-    if (!container) return;
-    try {
-      const r = await fetch('/api/setores/');
-      const data = await r.json();
-      const setores = data.results || data;
-
-      const pagina = window.location.pathname;
-
-      // Mapa de rotas reais por código de setor.
-      // Adicione aqui qualquer setor que tenha um app próprio.
-      const APP_ROUTES = {
-        'NSP': '/setor/nsp/',
-        'NIR': '/setor/nir/',
-      };
-
-      // Retorna o caminho real do setor (app próprio ou página genérica)
-      function rotaSetor(codigo) {
-        return APP_ROUTES[codigo] || '/dashboard/setor/' + codigo + '/';
-      }
-
-      // Verifica se a página atual corresponde ao setor
-      function setorAtivo(codigo) {
-        const rota = APP_ROUTES[codigo];
-        return rota ? pagina.startsWith(rota) : pagina === '/dashboard/setor/' + codigo + '/';
-      }
-
-      container.innerHTML = GRUPOS.map(g => {
-        const filhos = setores.filter(s => s.tipo === g.tipo);
-        if (!filhos.length) return '';
-        const id = 'acc-' + g.tipo;
-        const aberto = filhos.some(s => setorAtivo(s.codigo));
-
-        return `
-          <div class="mb-0.5">
-            <button onclick="toggleAcc('${id}')"
-              class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-              <span class="flex items-center gap-2">
-                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${g.cor}"></span>
-                ${g.label}
-              </span>
-              <svg id="${id}-chevron" class="w-3 h-3 text-gray-400 transition-transform ${aberto ? 'rotate-180' : ''}"
-                fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-              </svg>
-            </button>
-            <div id="${id}" class="${aberto ? '' : 'hidden'} pl-3">
-              ${filhos.map(s => `
-                <a href="${rotaSetor(s.codigo)}"
-                  class="sidebar-item flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-gray-600 ${setorAtivo(s.codigo) ? 'active' : ''}">
-                  <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:${s.cor}"></span>
-                  <span class="font-mono font-medium">${s.codigo}</span>
-                  <span class="text-gray-400 truncate">${s.nome}</span>
-                </a>`).join('')}
-            </div>
-          </div>`;
-      }).join('');
-    } catch(e) {}
-  }
-
+  // Sidebar accordion
   function toggleAcc(id) {
     const el = document.getElementById(id);
     const chevron = document.getElementById(id + '-chevron');
@@ -236,8 +188,6 @@
     el.classList.toggle('hidden');
     chevron?.classList.toggle('rotate-180');
   }
-
-  carregarSidebarSetores();
 
   // Badge de alertas
   async function carregarBadge() {

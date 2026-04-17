@@ -85,15 +85,15 @@ class Command(BaseCommand):
     help = 'Popula o banco com dados iniciais do hospital'
 
     def handle(self, *args, **options):
-        self.stdout.write('🏥 Iniciando seed do banco de dados...\n')
+        self.stdout.write('Iniciando seed do banco de dados...\n')
         self._criar_setores()
         self._criar_usuarios()
         self._criar_indicadores()
         self._criar_registros()
         self._criar_alertas_manuais()
         self._criar_notificacoes_nsp()
-        self.stdout.write(self.style.SUCCESS('\n✅ Seed concluído com sucesso!\n'))
-        self.stdout.write('📋 Credenciais de acesso (senha: hosp@2024):\n')
+        self.stdout.write(self.style.SUCCESS('\nSeed concluido com sucesso!\n'))
+        self.stdout.write('Credenciais de acesso (senha: hosp@2024):\n')
         for email, fn, ln, perfil, _, cargo in USUARIOS_DEMO:
             self.stdout.write(f'   {email}  ({perfil} — {cargo})\n')
 

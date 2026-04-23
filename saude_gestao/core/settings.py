@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     'apps.alertas',
     'apps.nsp',
     'apps.nir',
+    'apps.gfisio',
 ]
 
 MIDDLEWARE = [

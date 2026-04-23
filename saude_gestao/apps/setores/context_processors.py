@@ -12,8 +12,9 @@ GRUPOS_CONFIG = [
 ]
 
 APP_ROUTES = {
-    'NSP': '/setor/nsp/',
-    'NIR': '/setor/nir/',
+    'NSP':    '/setor/nsp/',
+    'NIR':    '/setor/nir/',
+    'GFISIO': '/setor/gfisio/',
 }
 
 

@@ -19,5 +19,7 @@ urlpatterns = [
     path('api/setor/nsp/', include('apps.nsp.urls')),
     path('setor/nir/', include('apps.nir.urls_views')),
     path('api/setor/nir/', include('apps.nir.urls')),
+    path('setor/gfisio/', include('apps.gfisio.urls_views')),
+    path('api/gfisio/', include('apps.gfisio.urls')),
     path('setor/', include('apps.setores.urls_setor')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

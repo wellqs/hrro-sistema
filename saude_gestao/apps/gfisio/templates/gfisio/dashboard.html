@@ -1,0 +1,164 @@
+{% extends "base/base.html" %}
+{% block title %}GFISIO — Fisioterapia{% endblock %}
+{% block nav_gfisio %}active{% endblock %}
+{% block page_title %}Gerência de Fisioterapia{% endblock %}
+
+{% block content %}
+<div id="gfisio-root">
+
+  <!-- Métricas -->
+  <div id="metricas-gfisio" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div>
+
+  <!-- Grid central -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
+
+    <!-- Tendência -->
+    <div class="lg:col-span-2 card p-5">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-sm font-semibold text-gray-800">Tendência de Atendimentos</h2>
+          <p class="text-xs text-gray-400 mt-0.5">Atendimentos realizados por mês</p>
+        </div>
+        <a href="/setor/gfisio/atendimentos/novo/" class="btn-primary text-xs">+ Novo Atendimento</a>
+      </div>
+      <div style="position:relative; height:220px;">
+        <canvas id="chart-tendencia"></canvas>
+      </div>
+    </div>
+
+    <!-- Por especialidade -->
+    <div class="card p-5">
+      <h2 class="text-sm font-semibold text-gray-800 mb-4">Por Especialidade (mês)</h2>
+      <div id="lista-especialidades" class="space-y-2"></div>
+    </div>
+  </div>
+
+  <!-- Por modalidade + Atendimentos recentes -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+    <div class="card p-5">
+      <h2 class="text-sm font-semibold text-gray-800 mb-4">Por Modalidade (mês)</h2>
+      <div id="lista-modalidades" class="space-y-3"></div>
+    </div>
+
+    <div class="lg:col-span-2 card p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-gray-800">Atendimentos Recentes</h2>
+        <a href="/setor/gfisio/atendimentos/" class="text-xs text-brand-600 hover:underline">Ver todos</a>
+      </div>
+      <div id="tabela-recentes"></div>
+    </div>
+  </div>
+
+</div>
+
+<style>
+.status-agendado     { background:#E6F1FB; color:#185FA5; }
+.status-em_andamento { background:#FAEEDA; color:#854F0B; }
+.status-realizado    { background:#E1F5EE; color:#0F6E56; }
+.status-falta        { background:#FCEBEB; color:#A32D2D; }
+.status-cancelado    { background:#f5f4f0; color:#9ca3af; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const ESP_LABEL = {
+  respiratoria:'Respiratória', ortopedica:'Ortopédica',
+  neurologica:'Neurológica', cardiovascular:'Cardiovascular',
+  pediatrica:'Pediátrica', outro:'Outro'
+};
+const ESP_COR = {
+  respiratoria:'#185FA5', ortopedica:'#0F6E56',
+  neurologica:'#534AB7', cardiovascular:'#A32D2D',
+  pediatrica:'#854F0B', outro:'#9ca3af'
+};
+const MOD_LABEL = {
+  internado:'Internado', uti:'UTI',
+  ambulatorial:'Ambulatorial', domiciliar:'Domiciliar'
+};
+const STATUS_LABEL = {
+  agendado:'Agendado', em_andamento:'Em Andamento',
+  realizado:'Realizado', falta:'Falta', cancelado:'Cancelado'
+};
+
+async function carregar() {
+  const token = localStorage.getItem('access_token');
+  const headers = token ? {'Authorization':'Bearer '+token} : {};
+  const d = await fetch('/api/gfisio/dashboard/', {headers}).then(r=>r.json());
+
+  // Métricas
+  const mets = [
+    {label:'Atendimentos no Mês', value: d.total_mes,       cor:'#185FA5', bg:'#E6F1FB'},
+    {label:'Agendados',            value: d.agendados,       cor:'#854F0B', bg:'#FAEEDA'},
+    {label:'Realizados no Mês',    value: d.realizados_mes,  cor:'#0F6E56', bg:'#E1F5EE'},
+    {label:'Altas no Mês',         value: d.altas_mes,       cor:'#534AB7', bg:'#EEEDFE'},
+  ];
+  document.getElementById('metricas-gfisio').innerHTML = mets.map(m=>`
+    <div class="metric-card" style="background:${m.bg}">
+      <div class="text-2xl font-bold" style="color:${m.cor}">${m.value}</div>
+      <div class="text-xs mt-1 text-gray-500">${m.label}</div>
+    </div>`).join('');
+
+  // Tendência
+  const ctx = document.getElementById('chart-tendencia').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: d.tendencia.map(t=>t.mes),
+      datasets: [{
+        label:'Atendimentos', data: d.tendencia.map(t=>t.total),
+        borderColor:'#185FA5', backgroundColor:'rgba(24,95,165,.08)',
+        tension:.3, fill:true, pointRadius:3,
+      }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ y:{beginAtZero:true, grid:{color:'#f0efeb'}}, x:{grid:{display:false}} } }
+  });
+
+  // Por especialidade
+  const maxEsp = Math.max(...d.por_especialidade.map(e=>e.total), 1);
+  document.getElementById('lista-especialidades').innerHTML = d.por_especialidade.map(e=>`
+    <div>
+      <div class="flex justify-between text-xs mb-1">
+        <span class="text-gray-600">${ESP_LABEL[e.especialidade]||e.especialidade}</span>
+        <span class="font-medium">${e.total}</span>
+      </div>
+      <div class="w-full bg-gray-100 rounded-full h-1.5">
+        <div class="h-1.5 rounded-full" style="width:${(e.total/maxEsp*100).toFixed(0)}%;background:${ESP_COR[e.especialidade]||'#9ca3af'}"></div>
+      </div>
+    </div>`).join('') || '<p class="text-xs text-gray-400">Sem dados no mês</p>';
+
+  // Por modalidade
+  document.getElementById('lista-modalidades').innerHTML = d.por_modalidade.map(m=>`
+    <div class="flex items-center justify-between">
+      <span class="text-sm text-gray-600">${MOD_LABEL[m.modalidade]||m.modalidade}</span>
+      <span class="pill pill-info">${m.total}</span>
+    </div>`).join('') || '<p class="text-xs text-gray-400">Sem dados</p>';
+
+  // Recentes
+  document.getElementById('tabela-recentes').innerHTML = d.recentes.length ? `
+    <table class="w-full text-xs">
+      <thead><tr class="text-gray-400 border-b border-gray-100">
+        <th class="text-left pb-2 font-medium">Paciente</th>
+        <th class="text-left pb-2 font-medium">Especialidade</th>
+        <th class="text-left pb-2 font-medium">Modalidade</th>
+        <th class="text-left pb-2 font-medium">Data</th>
+        <th class="text-left pb-2 font-medium">Status</th>
+      </tr></thead>
+      <tbody class="divide-y divide-gray-50">
+        ${d.recentes.map(a=>`
+          <tr class="hover:bg-gray-50 cursor-pointer" onclick="location.href='/setor/gfisio/atendimentos/${a.id}/'">
+            <td class="py-2 font-medium text-gray-800">${a.paciente_nome}</td>
+            <td class="py-2 text-gray-500">${ESP_LABEL[a.especialidade]||a.especialidade}</td>
+            <td class="py-2 text-gray-500">${MOD_LABEL[a.modalidade]||a.modalidade}</td>
+            <td class="py-2 text-gray-400">${a.data_atendimento}</td>
+            <td class="py-2"><span class="pill status-${a.status}">${STATUS_LABEL[a.status]||a.status}</span></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>` : '<p class="text-xs text-gray-400">Nenhum atendimento registrado.</p>';
+}
+
+carregar();
+</script>
+{% endblock %}

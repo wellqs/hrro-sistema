@@ -1,0 +1,135 @@
+{% extends "base/base.html" %}
+{% block title %}GFISIO — Novo Atendimento{% endblock %}
+{% block nav_gfisio %}active{% endblock %}
+{% block page_title %}Novo Atendimento de Fisioterapia{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <div class="card p-6">
+    <h2 class="text-sm font-semibold text-gray-800 mb-5">Registrar Atendimento</h2>
+
+    <div id="msg-erro" class="hidden mb-4 p-3 rounded-lg bg-red-50 text-red-600 text-xs"></div>
+    <div id="msg-ok"   class="hidden mb-4 p-3 rounded-lg bg-green-50 text-green-700 text-xs"></div>
+
+    <form id="form-novo" class="space-y-4">
+      {% csrf_token %}
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Paciente *</label>
+          <input type="text" id="paciente_nome" required placeholder="Nome completo">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Prontuário</label>
+          <input type="text" id="prontuario" placeholder="N° do prontuário">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Setor de Origem *</label>
+          <select id="setor_origem" required>
+            <option value="">Selecione...</option>
+            {% for s in setores %}
+            <option value="{{ s.id }}">{{ s.codigo }} — {{ s.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Modalidade *</label>
+          <select id="modalidade" required>
+            {% for v,l in modalidades %}
+            <option value="{{ v }}">{{ l }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Especialidade *</label>
+          <select id="especialidade" required>
+            {% for v,l in especialidades %}
+            <option value="{{ v }}">{{ l }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">N° da Sessão</label>
+          <input type="number" id="numero_sessao" value="1" min="1">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Data do Atendimento *</label>
+          <input type="date" id="data_atendimento" required>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Hora</label>
+          <input type="time" id="hora_inicio">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Descrição Clínica</label>
+        <textarea id="descricao_clinica" rows="3" placeholder="Resumo clínico / diagnóstico..."></textarea>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Objetivos Terapêuticos</label>
+        <textarea id="objetivos" rows="2" placeholder="Objetivos da fisioterapia..."></textarea>
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button type="submit" class="btn-primary">Registrar Atendimento</button>
+        <a href="/setor/gfisio/" class="btn-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.getElementById('data_atendimento').value = new Date().toISOString().slice(0,10);
+
+  document.getElementById('form-novo').addEventListener('submit', async e => {
+    e.preventDefault();
+    const erro = document.getElementById('msg-erro');
+    const ok   = document.getElementById('msg-ok');
+    erro.classList.add('hidden');
+    ok.classList.add('hidden');
+
+    const payload = {
+      paciente_nome:    document.getElementById('paciente_nome').value,
+      prontuario:       document.getElementById('prontuario').value,
+      setor_origem:     document.getElementById('setor_origem').value,
+      modalidade:       document.getElementById('modalidade').value,
+      especialidade:    document.getElementById('especialidade').value,
+      numero_sessao:    parseInt(document.getElementById('numero_sessao').value) || 1,
+      data_atendimento: document.getElementById('data_atendimento').value,
+      hora_inicio:      document.getElementById('hora_inicio').value || null,
+      descricao_clinica: document.getElementById('descricao_clinica').value,
+      objetivos:        document.getElementById('objetivos').value,
+      status:           'agendado',
+    };
+
+    const token = localStorage.getItem('access_token');
+    const headers = {'Content-Type':'application/json', 'X-CSRFToken': window.csrfToken};
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    const r = await fetch('/api/gfisio/atendimentos/', {method:'POST', headers, body: JSON.stringify(payload)});
+    const data = await r.json();
+
+    if (r.ok) {
+      ok.textContent = 'Atendimento registrado com sucesso!';
+      ok.classList.remove('hidden');
+      setTimeout(() => location.href = '/setor/gfisio/atendimentos/' + data.id + '/', 1000);
+    } else {
+      erro.textContent = JSON.stringify(data);
+      erro.classList.remove('hidden');
+    }
+  });
+</script>
+{% endblock %}

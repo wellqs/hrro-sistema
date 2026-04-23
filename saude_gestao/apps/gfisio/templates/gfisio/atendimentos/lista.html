@@ -1,0 +1,100 @@
+{% extends "base/base.html" %}
+{% block title %}GFISIO — Atendimentos{% endblock %}
+{% block nav_gfisio %}active{% endblock %}
+{% block page_title %}Atendimentos de Fisioterapia{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+  <div class="flex gap-2 flex-wrap">
+    <select id="filtro-especialidade" onchange="carregar()" class="text-xs" style="width:auto;padding:6px 10px;">
+      <option value="">Todas especialidades</option>
+      {% for v,l in especialidades %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+    </select>
+    <select id="filtro-modalidade" onchange="carregar()" class="text-xs" style="width:auto;padding:6px 10px;">
+      <option value="">Todas modalidades</option>
+      {% for v,l in modalidades %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+    </select>
+    <select id="filtro-status" onchange="carregar()" class="text-xs" style="width:auto;padding:6px 10px;">
+      <option value="">Todos status</option>
+      {% for v,l in status_choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+    </select>
+  </div>
+  <a href="/setor/gfisio/atendimentos/novo/" class="btn-primary text-xs">+ Novo Atendimento</a>
+</div>
+
+<div class="card p-5">
+  <div id="tabela-lista">
+    <p class="text-xs text-gray-400">Carregando...</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const ESP_LABEL = {
+  respiratoria:'Respiratória', ortopedica:'Ortopédica',
+  neurologica:'Neurológica', cardiovascular:'Cardiovascular',
+  pediatrica:'Pediátrica', outro:'Outro'
+};
+const MOD_LABEL = {
+  internado:'Internado', uti:'UTI',
+  ambulatorial:'Ambulatorial', domiciliar:'Domiciliar'
+};
+const STATUS_LABEL = {
+  agendado:'Agendado', em_andamento:'Em Andamento',
+  realizado:'Realizado', falta:'Falta', cancelado:'Cancelado'
+};
+
+async function carregar() {
+  const token = localStorage.getItem('access_token');
+  const headers = token ? {'Authorization':'Bearer '+token} : {};
+  const esp  = document.getElementById('filtro-especialidade').value;
+  const mod  = document.getElementById('filtro-modalidade').value;
+  const stat = document.getElementById('filtro-status').value;
+  const params = new URLSearchParams();
+  if (esp)  params.set('especialidade', esp);
+  if (mod)  params.set('modalidade', mod);
+  if (stat) params.set('status', stat);
+
+  const lista = await fetch('/api/gfisio/atendimentos/?' + params, {headers}).then(r=>r.json());
+
+  if (!lista.length) {
+    document.getElementById('tabela-lista').innerHTML = '<p class="text-xs text-gray-400">Nenhum atendimento encontrado.</p>';
+    return;
+  }
+
+  document.getElementById('tabela-lista').innerHTML = `
+    <table class="w-full text-xs">
+      <thead><tr class="text-gray-400 border-b border-gray-100">
+        <th class="text-left pb-2 font-medium">Paciente</th>
+        <th class="text-left pb-2 font-medium">Prontuário</th>
+        <th class="text-left pb-2 font-medium">Especialidade</th>
+        <th class="text-left pb-2 font-medium">Modalidade</th>
+        <th class="text-left pb-2 font-medium">Sessão</th>
+        <th class="text-left pb-2 font-medium">Data</th>
+        <th class="text-left pb-2 font-medium">Status</th>
+      </tr></thead>
+      <tbody class="divide-y divide-gray-50">
+        ${lista.map(a=>`
+          <tr class="hover:bg-gray-50 cursor-pointer" onclick="location.href='/setor/gfisio/atendimentos/${a.id}/'">
+            <td class="py-2 font-medium text-gray-800">${a.paciente_nome}${a.alta_fisioterapeutica?'<span class="ml-1 pill pill-ok">Alta</span>':''}</td>
+            <td class="py-2 text-gray-400 font-mono">${a.prontuario||'—'}</td>
+            <td class="py-2 text-gray-600">${ESP_LABEL[a.especialidade]||a.especialidade}</td>
+            <td class="py-2 text-gray-600">${MOD_LABEL[a.modalidade]||a.modalidade}</td>
+            <td class="py-2 text-center text-gray-500">${a.numero_sessao}</td>
+            <td class="py-2 text-gray-400">${a.data_atendimento}</td>
+            <td class="py-2"><span class="pill status-${a.status}">${STATUS_LABEL[a.status]||a.status}</span></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+carregar();
+</script>
+<style>
+.status-agendado     { background:#E6F1FB; color:#185FA5; }
+.status-em_andamento { background:#FAEEDA; color:#854F0B; }
+.status-realizado    { background:#E1F5EE; color:#0F6E56; }
+.status-falta        { background:#FCEBEB; color:#A32D2D; }
+.status-cancelado    { background:#f5f4f0; color:#9ca3af; }
+</style>
+{% endblock %}
